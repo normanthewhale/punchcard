@@ -698,15 +698,18 @@
     }
 
     list.innerHTML = logs.slice(0, 50).map(log => {
-      const dur = parseFloat(log["Duration (hrs)"]) || 0;
-      const cat = log["Category"] ? `<span class="log-category-badge">${esc(log["Category"])}</span>` : "";
-      const worker = log["Worker Name"] ? `<span>${esc(log["Worker Name"])}</span>` : "";
+      const dur      = parseFloat(log["Duration (hrs)"]) || 0;
+      const cat      = log["Category"] ? `<span class="log-category-badge">${esc(log["Category"])}</span>` : "";
+      const worker   = log["Worker Name"] ? `<span>${esc(log["Worker Name"])}</span>` : "";
+      const dateLong = formatDateLong(log["Date"] || "");
+      const startFmt = fmtAmPm(log["Start Time"]);
+      const endFmt   = fmtAmPm(log["End Time"]);
       return `<div class="log-item">
         <div class="log-top">
           <div class="log-project">${esc(log["Project"])}</div>
           <div class="log-duration">${dur.toFixed(2)}h</div>
         </div>
-        <div class="log-time">${esc(formatDateShort(log["Date"] || '') + ', ' + (log["Start Time"] || ''))} – ${esc(log["End Time"] || '')}</div>
+        <div class="log-time">${esc(dateLong)} · ${esc(startFmt)} – ${esc(endFmt)}</div>
         <div class="log-desc">${esc(log["Description"])}</div>
         <div class="log-meta">${cat}${worker}</div>
       </div>`;
@@ -757,8 +760,20 @@
 
   // Formats YYYY-MM-DD as "May 18"
   function formatDateShort(iso) {
-    const d = new Date(iso + "T12:00:00"); // noon avoids timezone edge cases
+    const d = new Date(iso + "T12:00:00");
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  }
+
+  // Formats YYYY-MM-DD as "May 18, 2026"
+  function formatDateLong(iso) {
+    if (!iso) return "";
+    const d = new Date(iso + "T12:00:00");
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  }
+
+  // Converts "8:00 AM" → "8:00am"
+  function fmtAmPm(timeStr) {
+    return (timeStr || "").replace(" AM", "am").replace(" PM", "pm");
   }
 
   // ── API ───────────────────────────────────────────────────────────────────
