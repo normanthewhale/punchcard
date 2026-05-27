@@ -527,7 +527,7 @@
           <option value="">All workers</option>
         </select>
       </div>
-      <button class="btn btn-submit" onclick="generateSummary()">Generate</button>
+      <button class="btn btn-submit" id="summary-generate-btn" onclick="generateSummary()">Generate</button>
     </div>
 
     <div id="summary-content" style="display:none;">
@@ -1258,6 +1258,11 @@
   }
 
   async function generateSummary() {
+    const genBtn = document.getElementById("summary-generate-btn");
+    genBtn.disabled = true;
+    genBtn.innerHTML = `<span class="spinner" style="vertical-align:middle; margin-right:8px;"></span>Loading…`;
+
+    try {
     let fromISO, toISO;
     if (summaryOption === "current") {
       const range = getWeekRange(weekStartDay);
@@ -1360,6 +1365,14 @@
 
     // Cache for print
     lastSummaryData = { summaryFor, fromISO, toISO, groupByWorker, rateDesc, rowData, totalHrs, totalPay };
+
+    } catch(err) {
+      toast("Could not generate summary.", "error");
+      console.error("generateSummary error:", err);
+    } finally {
+      genBtn.disabled = false;
+      genBtn.textContent = "Generate";
+    }
   }
 
   function printSummary() {
