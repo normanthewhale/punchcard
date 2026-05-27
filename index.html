@@ -294,6 +294,7 @@
       <div class="stat-card">
         <div class="stat-value" id="stat-today">0h</div>
         <div class="stat-label">Today</div>
+        <div class="stat-sublabel" id="stat-today-date"></div>
       </div>
       <div class="stat-card">
         <div class="stat-value" id="stat-week">0h</div>
@@ -749,6 +750,7 @@
     });
 
     document.getElementById("stat-today").textContent      = todayHrs.toFixed(1) + "h";
+    document.getElementById("stat-today-date").textContent = formatDateShort(today);
     document.getElementById("stat-week").textContent       = weekHrs.toFixed(1) + "h";
     document.getElementById("stat-week-range").textContent = sundayFmt + " – " + saturdayFmt;
     document.getElementById("stats-grid").style.display    = "grid";
