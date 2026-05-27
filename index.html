@@ -601,25 +601,43 @@
 
   // ── Timer ─────────────────────────────────────────────────────────────────
   function startTimer() {
-    try {
-      if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    // Grab all elements first and bail clearly if any are missing
+    var elStart   = document.getElementById("btn-start");
+    var elStop    = document.getElementById("btn-stop");
+    var elSubmit  = document.getElementById("submit-card");
+    var elClock   = document.getElementById("timer-clock");
+    var elStatus  = document.getElementById("timer-status");
+    var elStartAt = document.getElementById("timer-started-at");
+    var elDisplay = document.getElementById("timer-display");
 
-      startTimestamp = Date.now();
-
-      document.getElementById("btn-start").style.display  = "none";
-      document.getElementById("btn-stop").style.display   = "block";
-      document.getElementById("submit-card").style.display = "none";
-      document.getElementById("timer-clock").className    = "timer-clock running";
-      document.getElementById("timer-status").textContent = "Clocked in";
-      document.getElementById("timer-started-at").textContent = "Started at " + fmtTime12(new Date(startTimestamp));
-
-      tickTimer();
-      timerInterval = setInterval(tickTimer, 1000);
-
-      if (!workerName) setTimeout(openWorkerModal, 800);
-    } catch (err) {
-      console.error("startTimer error:", err);
+    if (!elStart || !elStop || !elSubmit || !elClock || !elStatus || !elStartAt || !elDisplay) {
+      console.error("startTimer: missing element(s)", {
+        elStart:   !!elStart,
+        elStop:    !!elStop,
+        elSubmit:  !!elSubmit,
+        elClock:   !!elClock,
+        elStatus:  !!elStatus,
+        elStartAt: !!elStartAt,
+        elDisplay: !!elDisplay
+      });
+      return;
     }
+
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+
+    startTimestamp = Date.now();
+
+    elStart.style.display  = "none";
+    elStop.style.display   = "block";
+    elSubmit.style.display = "none";
+    elClock.className      = "timer-clock running";
+    elStatus.textContent   = "Clocked in";
+    elStartAt.textContent  = "Started at " + fmtTime12(new Date(startTimestamp));
+
+    tickTimer();
+    timerInterval = setInterval(tickTimer, 1000);
+
+    if (!workerName) setTimeout(openWorkerModal, 800);
   }
 
   function tickTimer() {
