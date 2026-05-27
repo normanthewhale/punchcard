@@ -657,7 +657,7 @@
     const cat     = document.getElementById("filter-category").value;
 
     let filtered = allLogs.filter(log => {
-      const d = log["Date"];
+      const d = normalizeDate(log["Date"]);
       if (from && d < from) return false;
       if (to   && d > to)   return false;
       if (project && log["Project"]  !== project) return false;
@@ -698,12 +698,12 @@
     }
 
     list.innerHTML = logs.slice(0, 50).map(log => {
-      const dur      = parseFloat(log["Duration (hrs)"]) || 0;
+      const dur      = parseDuration(log["Duration (hrs)"]);
       const cat      = log["Category"] ? `<span class="log-category-badge">${esc(log["Category"])}</span>` : "";
       const worker   = log["Worker Name"] ? `<span>${esc(log["Worker Name"])}</span>` : "";
-      const dateLong = formatDateLong(log["Date"] || "");
-      const startFmt = fmtAmPm(log["Start Time"]);
-      const endFmt   = fmtAmPm(log["End Time"]);
+      const dateLong = formatDateLong(normalizeDate(log["Date"]));
+      const startFmt = normalizeTime(log["Start Time"]);
+      const endFmt   = normalizeTime(log["End Time"]);
       return `<div class="log-item">
         <div class="log-top">
           <div class="log-project">${esc(log["Project"])}</div>
@@ -725,8 +725,8 @@
 
     let todayHrs = 0, weekHrs = 0;
     logs.forEach(log => {
-      const d   = log["Date"];
-      const hrs = parseFloat(log["Duration (hrs)"]) || 0;
+      const d   = normalizeDate(log["Date"]);
+      const hrs = parseDuration(log["Duration (hrs)"]);
       if (d === today) todayHrs += hrs;
       if (d >= sundayISO && d <= saturdayISO) weekHrs += hrs;
     });
@@ -774,6 +774,44 @@
   // Converts "8:00 AM" → "8:00am"
   function fmtAmPm(timeStr) {
     return (timeStr || "").replace(" AM", "am").replace(" PM", "pm");
+  }
+
+  // Normalizes a date value to "YYYY-MM-DD".
+  // Handles plain strings ("2026-05-27") and ISO timestamps ("2026-05-27T05:00:00.000Z")
+  // that Sheets produces when it auto-converts date cells.
+  function normalizeDate(val) {
+    return String(val || "").substring(0, 10);
+  }
+
+  // Normalizes a time value to "8:00am" format.
+  // Handles "8:00 AM" strings and ISO timestamps from Sheets auto-conversion.
+  function normalizeTime(val) {
+    const s = String(val || "");
+    if (!s) return "";
+    if (s.includes("T")) {
+      const d = new Date(s);
+      if (isNaN(d.getTime())) return s;
+      // 1899 epoch = time-only cell — read UTC directly to avoid TZ shift
+      const h = d.getUTCFullYear() <= 1900 ? d.getUTCHours()   : d.getHours();
+      const m = d.getUTCFullYear() <= 1900 ? d.getUTCMinutes() : d.getMinutes();
+      const ampm = h >= 12 ? "pm" : "am";
+      return (h % 12 || 12) + ":" + String(m).padStart(2, "0") + ampm;
+    }
+    return fmtAmPm(s);
+  }
+
+  // Parses a duration value that may be a number, numeric string, or an ISO
+  // timestamp produced when Sheets formats the Duration column as a time cell.
+  function parseDuration(val) {
+    if (typeof val === "number") return val;
+    const s = String(val || "");
+    if (s.includes("T")) {
+      const d = new Date(s);
+      if (!isNaN(d.getTime())) {
+        return d.getUTCHours() + d.getUTCMinutes() / 60 + d.getUTCSeconds() / 3600;
+      }
+    }
+    return parseFloat(s) || 0;
   }
 
   // ── API ───────────────────────────────────────────────────────────────────

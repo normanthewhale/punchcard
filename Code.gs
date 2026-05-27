@@ -118,7 +118,16 @@ function getLogs(params) {
         if (header === "Date") {
           val = Utilities.formatDate(val, tz, "yyyy-MM-dd");
         } else if (header === "Start Time" || header === "End Time") {
-          val = Utilities.formatDate(val, tz, "h:mm a");
+          // Time-only cells land on the 1899 epoch — read UTC to avoid TZ shift
+          if (val.getUTCFullYear() <= 1900) {
+            var h   = val.getUTCHours();
+            var m   = val.getUTCMinutes();
+            var ap  = h >= 12 ? "PM" : "AM";
+            var h12 = h % 12 || 12;
+            val = h12 + ":" + (m < 10 ? "0" + m : String(m)) + " " + ap;
+          } else {
+            val = Utilities.formatDate(val, tz, "h:mm a");
+          }
         } else if (header === "Duration (hrs)") {
           // Time-formatted duration: extract hours from the UTC time component
           val = parseFloat((val.getUTCHours() + val.getUTCMinutes() / 60 + val.getUTCSeconds() / 3600).toFixed(2));
