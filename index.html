@@ -152,7 +152,7 @@
     /* ── Stats grid ── */
     .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
     .stat-card  { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 14px; text-align: center; }
-    .stat-value { font-size: 26px; font-weight: 700; color: var(--orange); letter-spacing: -1px; }
+    .stat-value { font-size: clamp(16px, 4vw, 22px); font-weight: 700; color: var(--orange); letter-spacing: -0.5px; }
     .stat-label { font-size: 12px; color: var(--text3); margin-top: 4px; }
     .stat-sublabel { font-size: 11px; color: var(--text3); margin-top: 2px; opacity: 0.7; }
 
@@ -357,13 +357,11 @@
         <div class="stat-value" id="stat-today">0h</div>
         <div class="stat-label">Today</div>
         <div class="stat-sublabel" id="stat-today-date"></div>
-        <div class="stat-pay" id="stat-today-pay" style="display:none;"></div>
       </div>
       <div class="stat-card">
         <div class="stat-value" id="stat-week">0h</div>
         <div class="stat-label">This week</div>
         <div class="stat-sublabel" id="stat-week-range"></div>
-        <div class="stat-pay" id="stat-week-pay" style="display:none;"></div>
       </div>
     </div>
 
@@ -1017,25 +1015,14 @@
       if (d >= weekStart && d <= weekEnd) weekHrs += hrs;
     });
 
-    document.getElementById("stat-today").textContent      = todayHrs.toFixed(1) + "h";
-    document.getElementById("stat-today-date").textContent = formatDateShort(today);
-    document.getElementById("stat-week").textContent       = weekHrs.toFixed(1) + "h";
-    document.getElementById("stat-week-range").textContent = formatDateShort(weekStart) + " – " + formatDateShort(weekEnd);
-    document.getElementById("stats-grid").style.display    = "grid";
-
-    // Pay display
     const todayPay = calcPay(todayHrs);
     const weekPay  = calcPay(weekHrs);
-    const todayPayEl = document.getElementById("stat-today-pay");
-    const weekPayEl  = document.getElementById("stat-week-pay");
-    if (todayPay !== null) {
-      todayPayEl.textContent = fmtPay(todayPay);
-      todayPayEl.style.display = "";
-    } else { todayPayEl.style.display = "none"; }
-    if (weekPay !== null) {
-      weekPayEl.textContent = fmtPay(weekPay);
-      weekPayEl.style.display = "";
-    } else { weekPayEl.style.display = "none"; }
+
+    document.getElementById("stat-today").textContent      = todayHrs.toFixed(1) + "h" + (todayPay !== null ? " · " + fmtPay(todayPay) : "");
+    document.getElementById("stat-today-date").textContent = formatDateShort(today);
+    document.getElementById("stat-week").textContent       = weekHrs.toFixed(1) + "h" + (weekPay !== null ? " · " + fmtPay(weekPay) : "");
+    document.getElementById("stat-week-range").textContent = formatDateShort(weekStart) + " – " + formatDateShort(weekEnd);
+    document.getElementById("stats-grid").style.display    = "grid";
   }
 
   // Returns YYYY-MM-DD using local calendar date
