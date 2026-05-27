@@ -1,7 +1,7 @@
 // ============================================================
 //  Punchcard – Google Apps Script Backend 
 // ============================================================
-// Testing github action.
+// Auto-deploy via GitHub Actions ✓
 const SHEET_NAME_LOGS     = "TimeLogs";
 const SHEET_NAME_PROJECTS = "Projects";
 
