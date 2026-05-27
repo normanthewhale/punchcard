@@ -715,7 +715,7 @@
   }
 
   function updateAdminUI() {
-    document.getElementById("filter-worker-wrap").style.display = isAdminMode ? "flex" : "none";
+    document.getElementById("filter-worker-wrap").style.display = isAdminMode ? "" : "none";
     if (isAdminMode) {
       const names = [...new Set(allLogs.map(l => l["Worker Name"]).filter(Boolean))].sort();
       const sel   = document.getElementById("filter-worker");
