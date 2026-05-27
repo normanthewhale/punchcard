@@ -1,6 +1,5 @@
 // ============================================================
 //  Punchcard – Google Apps Script Backend
-//  Paste this entire file into your Apps Script project.
 // ============================================================
 
 const SHEET_NAME_LOGS     = "TimeLogs";
@@ -12,8 +11,6 @@ function doPost(e) { return handleRequest(e); }
 function handleRequest(e) {
   var output;
   try {
-    // GET requests use e.parameter (query string key/value pairs)
-    // POST requests use e.postData.contents (JSON body)
     var params;
     if (e.postData && e.postData.contents) {
       params = JSON.parse(e.postData.contents);
@@ -36,7 +33,7 @@ function handleRequest(e) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// ── Get project list ──────────────────────────────────────────────────────────
+// ── Get project list (now includes Category column) ───────────────────────────
 function getProjects() {
   var ss    = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(SHEET_NAME_PROJECTS);
@@ -45,9 +42,13 @@ function getProjects() {
   var data     = sheet.getDataRange().getValues();
   var projects = [];
   for (var i = 1; i < data.length; i++) {
-    var name = data[i][0];
+    var name     = data[i][0];
+    var category = data[i][1] || "Other";
     if (name && name.toString().trim() !== "") {
-      projects.push(name.toString().trim());
+      projects.push({
+        name:     name.toString().trim(),
+        category: category.toString().trim()
+      });
     }
   }
   return { projects: projects };
@@ -59,8 +60,8 @@ function logTime(params) {
   var sheet = ss.getSheetByName(SHEET_NAME_LOGS);
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_NAME_LOGS);
-    sheet.appendRow(["ID","Worker Name","Project","Date","Start Time","End Time","Duration (hrs)","Description","Submitted At"]);
-    sheet.getRange(1,1,1,9).setFontWeight("bold").setBackground("#e8f0fe");
+    sheet.appendRow(["ID","Worker Name","Category","Project","Date","Start Time","End Time","Duration (hrs)","Description","Submitted At"]);
+    sheet.getRange(1,1,1,10).setFontWeight("bold").setBackground("#e8f0fe");
     sheet.setFrozenRows(1);
   }
 
@@ -73,6 +74,7 @@ function logTime(params) {
   sheet.appendRow([
     id,
     params.workerName   || "",
+    params.category     || "",
     params.project      || "",
     Utilities.formatDate(startDT, Session.getScriptTimeZone(), "yyyy-MM-dd"),
     Utilities.formatDate(startDT, Session.getScriptTimeZone(), "h:mm a"),
@@ -100,9 +102,7 @@ function getLogs(params) {
     for (var j = 0; j < headers.length; j++) {
       row[headers[j]] = data[i][j];
     }
-    if (!params.workerName || row["Worker Name"] === params.workerName) {
-      logs.push(row);
-    }
+    logs.push(row);
   }
   return { logs: logs.reverse() };
 }
@@ -114,26 +114,33 @@ function setupSheets() {
   var projSheet = ss.getSheetByName(SHEET_NAME_PROJECTS);
   if (!projSheet) {
     projSheet = ss.insertSheet(SHEET_NAME_PROJECTS);
-    projSheet.appendRow(["Project Name"]);
-    projSheet.appendRow(["123 Oak Street"]);
-    projSheet.appendRow(["456 Maple Drive"]);
-    projSheet.appendRow(["789 Pine Court"]);
-    projSheet.getRange(1,1).setFontWeight("bold").setBackground("#e8f0fe");
+    projSheet.appendRow(["Project Name", "Category"]);
+    projSheet.appendRow(["123 Oak Street",  "New Construction"]);
+    projSheet.appendRow(["456 Maple Drive", "New Construction"]);
+    projSheet.appendRow(["789 Pine Court",  "Rental"]);
+    projSheet.getRange(1,1,1,2).setFontWeight("bold").setBackground("#e8f0fe");
     projSheet.setFrozenRows(1);
     projSheet.setColumnWidth(1, 220);
+    projSheet.setColumnWidth(2, 160);
+
+    // Add dropdown validation for Category column
+    var categoryRule = SpreadsheetApp.newDataValidation()
+      .requireValueInList(["New Construction", "Rental", "Other"], true)
+      .build();
+    projSheet.getRange("B2:B1000").setDataValidation(categoryRule);
   }
 
   var logSheet = ss.getSheetByName(SHEET_NAME_LOGS);
   if (!logSheet) {
     logSheet = ss.insertSheet(SHEET_NAME_LOGS);
-    logSheet.appendRow(["ID","Worker Name","Project","Date","Start Time","End Time","Duration (hrs)","Description","Submitted At"]);
-    logSheet.getRange(1,1,1,9).setFontWeight("bold").setBackground("#e8f0fe");
+    logSheet.appendRow(["ID","Worker Name","Category","Project","Date","Start Time","End Time","Duration (hrs)","Description","Submitted At"]);
+    logSheet.getRange(1,1,1,10).setFontWeight("bold").setBackground("#e8f0fe");
     logSheet.setFrozenRows(1);
-    var widths = [220,140,180,100,90,90,110,300,160];
+    var widths = [220,140,140,180,100,90,90,110,300,160];
     widths.forEach(function(w,i){ logSheet.setColumnWidth(i+1, w); });
   }
 
-  SpreadsheetApp.getUi().alert("✅ Setup complete! Both sheets are ready.\n\nAdd your house/project names to the 'Projects' tab, then deploy as a Web App.");
+  SpreadsheetApp.getUi().alert("✅ Setup complete!\n\nProjects tab now has a Category column with a dropdown.\nAdd your properties and assign each a category.");
 }
 
 // ── Spreadsheet menu ──────────────────────────────────────────────────────────
