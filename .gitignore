@@ -1,5 +1,6 @@
 # clasp OAuth credentials — never commit
 .clasprc.json
+creds.json
 
 # Node
 node_modules/
