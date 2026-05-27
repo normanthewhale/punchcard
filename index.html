@@ -220,7 +220,7 @@
     .btn-summary:hover { background: rgba(232,119,58,0.08); }
 
     /* ── Summary modal content ── */
-    .summary-header { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+    .summary-header { margin-bottom: 20px; }
     .summary-header h3 { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
     .summary-meta { font-size: 13px; color: var(--text2); line-height: 1.7; }
     .summary-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
@@ -521,6 +521,12 @@
           </div>
         </div>
       </div>
+      <div id="summary-worker-wrap" style="display:none;">
+        <label for="summary-worker">Worker</label>
+        <select id="summary-worker">
+          <option value="">All workers</option>
+        </select>
+      </div>
       <button class="btn btn-submit" onclick="generateSummary()">Generate</button>
     </div>
 
@@ -532,7 +538,7 @@
       <table class="summary-table">
         <thead>
           <tr>
-            <th>Project</th>
+            <th id="summary-col-header">Project</th>
             <th>Hours</th>
             <th>Amount</th>
           </tr>
@@ -545,7 +551,7 @@
         <span id="summary-total-pay"></span>
       </div>
       <div style="display:flex; gap:10px; margin-top:20px;">
-        <button class="btn btn-submit" id="summary-print-btn" onclick="window.print()" style="flex:1;">Print / Save PDF</button>
+        <button class="btn btn-submit" id="summary-print-btn" onclick="printSummary()" style="flex:1;">Print / Save PDF</button>
         <button class="btn btn-secondary" id="summary-close-btn" onclick="closeSummaryModal()" style="flex:1;">Close</button>
       </div>
       <button onclick="showSummarySelector()" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;margin-top:12px;padding:0;">← Change date range</button>
@@ -1214,10 +1220,22 @@
 
   function openSummaryModal() {
     showSummarySelector();
-    // Pre-fill current week dates
     const { start, end } = getWeekRange(weekStartDay);
     document.getElementById("summary-from").value = start;
     document.getElementById("summary-to").value   = end;
+
+    // Admin: populate worker selector
+    const workerWrap = document.getElementById("summary-worker-wrap");
+    if (isAdminMode) {
+      const names = [...new Set(allLogs.map(l => l["Worker Name"]).filter(Boolean))].sort();
+      const sel   = document.getElementById("summary-worker");
+      sel.innerHTML = '<option value="">All workers</option>' +
+        names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+      workerWrap.style.display = "";
+    } else {
+      workerWrap.style.display = "none";
+    }
+
     document.getElementById("summary-modal").classList.add("open");
   }
 
@@ -1250,31 +1268,43 @@
       if (fromISO > toISO)    { toast("From date must be before To date.", "error"); return; }
     }
 
-    // Filter logs for this user in the date range
+    // Admin: respect selected worker ("" = all workers)
+    const selectedWorker = isAdminMode
+      ? (document.getElementById("summary-worker").value || "")
+      : workerName;
+    const groupByWorker = isAdminMode && selectedWorker === "";
+
+    // Filter logs
     const filtered = allLogs.filter(log => {
       const d = normalizeDate(log["Date"]);
-      return d >= fromISO && d <= toISO;
+      if (d < fromISO || d > toISO) return false;
+      if (!groupByWorker && selectedWorker) {
+        if ((log["Worker Name"] || "").trim() !== selectedWorker) return false;
+      }
+      return true;
     });
 
-    // Aggregate by project
-    const projectMap = {};
+    // Aggregate by worker (admin all) or by project (default)
+    const groupMap = {};
     filtered.forEach(log => {
-      const proj = log["Project"] || log["Category"] || "Unknown";
-      const hrs  = parseDuration(log["Duration (hrs)"]);
-      if (!projectMap[proj]) projectMap[proj] = 0;
-      projectMap[proj] += hrs;
+      const key = groupByWorker
+        ? (log["Worker Name"] || "Unknown Worker")
+        : (log["Project"] || log["Category"] || "Unknown");
+      const hrs = parseDuration(log["Duration (hrs)"]);
+      if (!groupMap[key]) groupMap[key] = 0;
+      groupMap[key] += hrs;
     });
 
-    const totalHrs = Object.values(projectMap).reduce((a, b) => a + b, 0);
+    const totalHrs = Object.values(groupMap).reduce((a, b) => a + b, 0);
     const totalPay = calcPay(totalHrs);
 
     // Build table rows
-    const rowsHTML = Object.entries(projectMap)
+    const rowsHTML = Object.entries(groupMap)
       .sort((a, b) => b[1] - a[1])
-      .map(([proj, hrs]) => {
+      .map(([label, hrs]) => {
         const pay = calcPay(hrs);
         return `<tr>
-          <td>${esc(proj)}</td>
+          <td>${esc(label)}</td>
           <td>${hrs.toFixed(2)}h</td>
           <td>${pay !== null ? fmtPay(pay) : "—"}</td>
         </tr>`;
@@ -1282,23 +1312,81 @@
 
     // Rate description
     const rateDesc = rateAmount > 0
-      ? (rateType === "daily"
-          ? `$${rateAmount.toFixed(2)}/day (8h day)`
-          : `$${rateAmount.toFixed(2)}/hr`)
+      ? (rateType === "daily" ? `$${rateAmount.toFixed(2)}/day (8h day)` : `$${rateAmount.toFixed(2)}/hr`)
       : "No rate set";
 
-    // Populate modal
+    // Summary label: who is this for?
+    const summaryFor = groupByWorker ? "All workers" : (selectedWorker || workerName || "—");
+    const colHeader  = groupByWorker ? "Worker" : "Project";
+
+    document.getElementById("summary-col-header").textContent = colHeader;
     document.getElementById("summary-title").textContent =
-      (workerName || "Summary") + " · " + formatDateShort(fromISO) + " – " + formatDateShort(toISO);
+      summaryFor + " · " + formatDateShort(fromISO) + " – " + formatDateShort(toISO);
     document.getElementById("summary-meta").innerHTML =
-      `<strong style="color:var(--text)">${esc(workerName || "—")}</strong><br>` +
+      `<strong style="color:var(--text)">${esc(summaryFor)}</strong><br>` +
       `${formatDateLong(fromISO)} – ${formatDateLong(toISO)}<br>Rate: ${rateDesc}`;
-    document.getElementById("summary-rows").innerHTML = rowsHTML || `<tr><td colspan="3" style="color:var(--text3); padding-top:12px;">No entries in this range.</td></tr>`;
+    document.getElementById("summary-rows").innerHTML = rowsHTML ||
+      `<tr><td colspan="3" style="color:var(--text3); padding-top:12px;">No entries in this range.</td></tr>`;
     document.getElementById("summary-total-hrs").textContent = totalHrs.toFixed(2) + "h";
     document.getElementById("summary-total-pay").textContent = totalPay !== null ? fmtPay(totalPay) : "—";
 
     document.getElementById("summary-date-selector").style.display = "none";
     document.getElementById("summary-content").style.display = "";
+  }
+
+  function printSummary() {
+    const title    = document.getElementById("summary-title").textContent;
+    const colHdr   = document.getElementById("summary-col-header").textContent;
+    const metaEl   = document.getElementById("summary-meta");
+    // Extract plain text lines from meta (strip HTML tags)
+    const metaLines = metaEl.innerText || metaEl.textContent;
+    const rows     = document.getElementById("summary-rows").innerHTML;
+    const totalHrs = document.getElementById("summary-total-hrs").textContent;
+    const totalPay = document.getElementById("summary-total-pay").textContent;
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Punchcard – ${title}</title>
+  <style>
+    @media print { @page { margin: 1.2cm 1.5cm; } }
+    body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #111; background: #fff; padding: 32px; max-width: 680px; margin: 0 auto; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    h1 { font-size: 19px; font-weight: 700; margin: 0 0 10px; }
+    .meta { font-size: 13px; color: #555; line-height: 1.8; margin-bottom: 24px; white-space: pre-line; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+    th { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #888; text-align: left; padding: 0 0 8px; border-bottom: 2px solid #ddd; }
+    th:nth-child(2), td:nth-child(2) { text-align: right; padding-right: 20px; }
+    th:last-child, td:last-child { text-align: right; }
+    td { font-size: 14px; padding: 9px 0; border-bottom: 1px solid #eee; color: #111; }
+    .totals { display: flex; justify-content: space-between; padding-top: 14px; font-size: 15px; font-weight: 700; border-top: 2px solid #ddd; }
+    .totals-right { display: flex; gap: 36px; }
+    .green { color: #2e7d4f; }
+  </style>
+</head>
+<body>
+  <h1>${title}</h1>
+  <div class="meta">${metaLines}</div>
+  <table>
+    <thead><tr><th>${colHdr}</th><th>Hours</th><th>Amount</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="totals">
+    <span>Total</span>
+    <div class="totals-right">
+      <span>${totalHrs}</span>
+      <span class="green">${totalPay}</span>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank", "width=750,height=950");
+    if (!win) { toast("Allow pop-ups to generate PDF.", "error"); return; }
+    win.document.write(html);
+    win.document.close();
+    // Wait for load then open print dialog (browser always includes Save as PDF)
+    win.onload = () => { win.focus(); win.print(); };
   }
 
   // ── Modal close on backdrop click ─────────────────────────────────────────
