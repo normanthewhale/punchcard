@@ -706,7 +706,7 @@
           <div class="log-project">${esc(log["Project"])}</div>
           <div class="log-duration">${dur.toFixed(2)}h</div>
         </div>
-        <div class="log-time">${esc(log["Date"])} · ${esc(log["Start Time"])} – ${esc(log["End Time"])}</div>
+        <div class="log-time">${esc(formatDateShort(log["Date"] || '') + ', ' + (log["Start Time"] || ''))} – ${esc(log["End Time"] || '')}</div>
         <div class="log-desc">${esc(log["Description"])}</div>
         <div class="log-meta">${cat}${worker}</div>
       </div>`;
@@ -714,31 +714,45 @@
   }
 
   function renderStats(logs) {
-    const today      = new Date().toISOString().split("T")[0];
-    const sundayISO  = getSundayISO();
-    const todayFmt   = formatDateShort(today);
-    const sundayFmt  = formatDateShort(sundayISO);
+    const today       = localDateISO(new Date());
+    const sundayISO   = getSundayISO();
+    const saturdayISO = getSaturdayISO();
+    const sundayFmt   = formatDateShort(sundayISO);
+    const saturdayFmt = formatDateShort(saturdayISO);
 
     let todayHrs = 0, weekHrs = 0;
     logs.forEach(log => {
       const d   = log["Date"];
       const hrs = parseFloat(log["Duration (hrs)"]) || 0;
       if (d === today) todayHrs += hrs;
-      if (d >= sundayISO && d <= today) weekHrs += hrs;
+      if (d >= sundayISO && d <= saturdayISO) weekHrs += hrs;
     });
 
     document.getElementById("stat-today").textContent      = todayHrs.toFixed(1) + "h";
     document.getElementById("stat-week").textContent       = weekHrs.toFixed(1) + "h";
-    document.getElementById("stat-week-range").textContent = sundayFmt + " – " + todayFmt;
+    document.getElementById("stat-week-range").textContent = sundayFmt + " – " + saturdayFmt;
     document.getElementById("stats-grid").style.display    = "grid";
   }
 
-  // Returns the most recent Sunday as YYYY-MM-DD
+  // Returns YYYY-MM-DD using local calendar date (avoids UTC offset edge cases)
+  function localDateISO(d) {
+    return d.getFullYear() + "-" +
+      String(d.getMonth() + 1).padStart(2, "0") + "-" +
+      String(d.getDate()).padStart(2, "0");
+  }
+
+  // Returns Sunday of the current week as YYYY-MM-DD
   function getSundayISO() {
-    const d   = new Date();
-    const day = d.getDay(); // 0=Sun, 1=Mon, ...
-    d.setDate(d.getDate() - day);
-    return d.toISOString().split("T")[0];
+    const d = new Date();
+    d.setDate(d.getDate() - d.getDay());
+    return localDateISO(d);
+  }
+
+  // Returns Saturday of the current week as YYYY-MM-DD
+  function getSaturdayISO() {
+    const d = new Date();
+    d.setDate(d.getDate() + (6 - d.getDay()));
+    return localDateISO(d);
   }
 
   // Formats YYYY-MM-DD as "May 18"
