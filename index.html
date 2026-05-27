@@ -133,6 +133,7 @@
     .log-time     { font-size: 13px; color: var(--text2); margin-bottom: 6px; }
     .log-desc     { font-size: 14px; color: var(--text2); line-height: 1.5; }
     .log-meta     { font-size: 12px; color: var(--text3); margin-top: 6px; display: flex; gap: 10px; }
+    .log-worker   { font-size: 12px; font-weight: 600; color: var(--orange); }
     .log-category-badge {
       display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px;
       border-radius: 10px; background: var(--bg3); border: 1px solid var(--border);
@@ -330,6 +331,12 @@
             <option value="Other">Other</option>
           </select>
         </div>
+        <div id="filter-worker-wrap" style="display:none;">
+          <label>Worker</label>
+          <select id="filter-worker" onchange="applyFilters()">
+            <option value="">All workers</option>
+          </select>
+        </div>
       </div>
       <button class="btn btn-secondary btn-filter-clear" style="margin-top:12px;" onclick="clearFilters()">Clear filters</button>
     </div>
@@ -358,6 +365,18 @@
     <input type="text" id="worker-input" placeholder="e.g. Mike, Sarah…" autocomplete="name" style="font-size:18px;" />
     <button class="btn btn-submit" onclick="saveWorkerName()">Save</button>
     <button class="btn btn-secondary" style="margin-top:10px;" onclick="closeWorkerModal()">Cancel</button>
+
+    <!-- Admin access — hidden by default, expands when toggled -->
+    <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border);">
+      <button id="admin-toggle-btn" onclick="toggleAdminSection()" style="background:none; border:none; color:var(--text3); font-size:12px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; cursor:pointer; padding:0; display:flex; align-items:center; gap:6px;">
+        <span id="admin-toggle-icon">▸</span> Admin access
+      </button>
+      <div id="admin-section" style="display:none; margin-top:12px;">
+        <label for="admin-input">Admin passcode</label>
+        <input type="text" id="admin-input" placeholder="Enter passcode…" autocomplete="off" />
+        <p style="font-size:12px; color:var(--text3); margin-top:-10px; margin-bottom:0; line-height:1.5;">Unlocks all-worker view in History. Leave blank for standard access (your entries only).</p>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -372,6 +391,8 @@
   let startTimestamp   = null;
   let endTimestamp     = null;
   let workerName       = localStorage.getItem("ft_worker") || "";
+  let adminCode        = localStorage.getItem("ft_admin_code") || "";
+  let isAdminMode      = false;
   let allProjects      = [];   // [{ name, category }]
   let allLogs          = [];   // full fetched log list
   let selectedCategory = "";   // category selected on clock-out form
@@ -417,8 +438,22 @@
   // ── Worker name ───────────────────────────────────────────────────────────
   function openWorkerModal() {
     document.getElementById("worker-input").value = workerName;
+    document.getElementById("admin-input").value  = adminCode;
+    // Auto-expand admin section if a code is already saved
+    if (adminCode) {
+      document.getElementById("admin-section").style.display = "block";
+      document.getElementById("admin-toggle-icon").textContent = "▾";
+    }
     document.getElementById("worker-modal").classList.add("open");
     setTimeout(() => document.getElementById("worker-input").focus(), 300);
+  }
+
+  function toggleAdminSection() {
+    const section = document.getElementById("admin-section");
+    const icon    = document.getElementById("admin-toggle-icon");
+    const isOpen  = section.style.display !== "none";
+    section.style.display   = isOpen ? "none" : "block";
+    icon.textContent        = isOpen ? "▸" : "▾";
   }
 
   function closeWorkerModal() {
@@ -426,13 +461,21 @@
   }
 
   function saveWorkerName() {
-    const val = document.getElementById("worker-input").value.trim();
+    const val  = document.getElementById("worker-input").value.trim();
     if (!val) { toast("Please enter your name.", "error"); return; }
+    const code = document.getElementById("admin-input").value.trim();
     workerName = val;
+    adminCode  = code;
     localStorage.setItem("ft_worker", val);
+    if (code) { localStorage.setItem("ft_admin_code", code); }
+    else      { localStorage.removeItem("ft_admin_code"); }
     updateWorkerDisplay();
     closeWorkerModal();
-    toast("Welcome, " + val + "! 👋", "success");
+    toast("Saved! 👋", "success");
+    // Reload history so admin/regular mode takes effect immediately
+    if (document.getElementById("screen-history").classList.contains("active")) {
+      loadHistory();
+    }
   }
 
   function updateWorkerDisplay() {
@@ -657,8 +700,12 @@
     document.getElementById("results-count").style.display = "none";
 
     try {
-      const res = await apiFetch({ action: "getLogs" });
-      allLogs   = res.logs || [];
+      const params = { action: "getLogs", workerName: workerName };
+      if (adminCode) params.adminCode = adminCode;
+      const res = await apiFetch(params);
+      allLogs     = res.logs || [];
+      isAdminMode = res.isAdmin || false;
+      updateAdminUI();
       renderStats(allLogs);
       applyFilters();
     } catch (err) {
@@ -667,18 +714,30 @@
     }
   }
 
+  function updateAdminUI() {
+    document.getElementById("filter-worker-wrap").style.display = isAdminMode ? "flex" : "none";
+    if (isAdminMode) {
+      const names = [...new Set(allLogs.map(l => l["Worker Name"]).filter(Boolean))].sort();
+      const sel   = document.getElementById("filter-worker");
+      sel.innerHTML = '<option value="">All workers</option>' +
+        names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+    }
+  }
+
   function applyFilters() {
     const from    = document.getElementById("filter-from").value;
     const to      = document.getElementById("filter-to").value;
     const project = document.getElementById("filter-project").value;
     const cat     = document.getElementById("filter-category").value;
+    const worker  = isAdminMode ? document.getElementById("filter-worker").value : "";
 
     let filtered = allLogs.filter(log => {
       const d = normalizeDate(log["Date"]);
       if (from && d < from) return false;
       if (to   && d > to)   return false;
-      if (project && log["Project"]  !== project) return false;
-      if (cat     && log["Category"] !== cat)     return false;
+      if (project && log["Project"]  !== project)    return false;
+      if (cat     && log["Category"] !== cat)        return false;
+      if (worker  && log["Worker Name"] !== worker)  return false;
       return true;
     });
 
@@ -698,6 +757,7 @@
     document.getElementById("filter-to").value       = "";
     document.getElementById("filter-project").value  = "";
     document.getElementById("filter-category").value = "";
+    if (isAdminMode) document.getElementById("filter-worker").value = "";
     applyFilters();
   }
 
@@ -717,11 +777,13 @@
     list.innerHTML = logs.slice(0, 50).map(log => {
       const dur      = parseDuration(log["Duration (hrs)"]);
       const project  = log["Project"] || log["Category"] || "Unknown Project";
-      const worker   = log["Worker Name"] ? `<span>${esc(log["Worker Name"])}</span>` : "";
       const dateLong = formatDateLong(normalizeDate(log["Date"]));
       const startFmt = normalizeTime(log["Start Time"]);
       const endFmt   = normalizeTime(log["End Time"]);
       const durStr   = dur >= 0.1 ? dur.toFixed(2) + "h" : (dur * 60).toFixed(0) + "m";
+      // Show worker name only in admin mode (regular users always see their own data)
+      const workerLine = (isAdminMode && log["Worker Name"])
+        ? `<span class="log-worker">${esc(log["Worker Name"])}</span>` : "";
       return `<div class="log-item">
         <div class="log-top">
           <div class="log-project">${esc(project)}</div>
@@ -729,7 +791,7 @@
         </div>
         <div class="log-time">${esc(dateLong)} &nbsp;·&nbsp; ${esc(startFmt)} – ${esc(endFmt)}</div>
         <div class="log-desc">${esc(log["Description"])}</div>
-        <div class="log-meta">${worker}</div>
+        ${workerLine ? `<div class="log-meta">${workerLine}</div>` : ""}
       </div>`;
     }).join("");
   }
@@ -831,10 +893,13 @@
   }
 
   // ── API ───────────────────────────────────────────────────────────────────
+  // Uses POST so params (including admin code) never appear in the URL.
   async function apiFetch(params) {
-    const url = new URL(API_URL);
-    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-    const res = await fetch(url.toString(), { redirect: "follow" });
+    const res = await fetch(API_URL, {
+      method:   "POST",
+      body:     JSON.stringify(params),
+      redirect: "follow"
+    });
     if (!res.ok) throw new Error("HTTP " + res.status);
     return res.json();
   }

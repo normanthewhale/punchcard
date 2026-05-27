@@ -100,7 +100,15 @@ function logTime(params) {
 function getLogs(params) {
   var ss    = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(SHEET_NAME_LOGS);
-  if (!sheet) return { logs: [] };
+  if (!sheet) return { logs: [], isAdmin: false };
+
+  // ── Admin access check ────────────────────────────────────────────────────
+  var isAdmin   = false;
+  var adminCode = (params.adminCode || "").toString().trim();
+  if (adminCode) {
+    var storedCode = PropertiesService.getScriptProperties().getProperty("ADMIN_CODE");
+    isAdmin = !!(storedCode && adminCode === storedCode);
+  }
 
   var data    = sheet.getDataRange().getValues();
   var headers = data[0].map(String);
@@ -139,7 +147,20 @@ function getLogs(params) {
     }
     logs.push(row);
   }
-  return { logs: logs.reverse() };
+
+  // ── Filter by worker name for non-admin users ─────────────────────────────
+  if (!isAdmin) {
+    var workerName = (params.workerName || "").toString().trim();
+    if (workerName) {
+      logs = logs.filter(function(log) {
+        return (log["Worker Name"] || "").toString().trim().toLowerCase() === workerName.toLowerCase();
+      });
+    } else {
+      logs = []; // No name provided → return nothing (don't expose all records)
+    }
+  }
+
+  return { logs: logs.reverse(), isAdmin: isAdmin };
 }
 
 // ── First-time setup ──────────────────────────────────────────────────────────
@@ -176,6 +197,29 @@ function setupSheets() {
   }
 
   SpreadsheetApp.getUi().alert("✅ Setup complete!\n\nProjects tab now has a Category column with a dropdown.\nAdd your properties and assign each a category.");
+}
+
+// ── Set admin passcode (run from Sheets menu) ─────────────────────────────────
+function setAdminCode() {
+  var ui      = SpreadsheetApp.getUi();
+  var current = PropertiesService.getScriptProperties().getProperty("ADMIN_CODE");
+  var prompt  = current
+    ? "A passcode is already set. Enter a new one to replace it, or leave blank to clear it:"
+    : "Enter a passcode for admin access in the app (minimum 4 characters):";
+
+  var result = ui.prompt("Set Admin Passcode", prompt, ui.ButtonSet.OK_CANCEL);
+  if (result.getSelectedButton() !== ui.Button.OK) return;
+
+  var code = result.getResponseText().trim();
+  if (code === "") {
+    PropertiesService.getScriptProperties().deleteProperty("ADMIN_CODE");
+    ui.alert("✅ Admin passcode cleared. All users will now see only their own data.");
+  } else if (code.length < 4) {
+    ui.alert("❌ Passcode must be at least 4 characters. Nothing was changed.");
+  } else {
+    PropertiesService.getScriptProperties().setProperty("ADMIN_CODE", code);
+    ui.alert("✅ Admin passcode saved.\n\nShare this code only with people who should see all workers' data in the app.");
+  }
 }
 
 // ── Fix column structure (run once if sheet predates the Category+Project feature) ─
@@ -244,5 +288,6 @@ function onOpen() {
     .createMenu("⏱ Punchcard")
     .addItem("Set up sheets", "setupSheets")
     .addItem("Fix columns (add missing Project column)", "migrateAddProjectColumn")
+    .addItem("Set admin passcode", "setAdminCode")
     .addToUi();
 }
