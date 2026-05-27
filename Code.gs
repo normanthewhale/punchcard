@@ -4,6 +4,7 @@
 // Auto-deploy via GitHub Actions ✓
 const SHEET_NAME_LOGS     = "TimeLogs";
 const SHEET_NAME_PROJECTS = "Projects";
+const SHEET_NAME_WORKERS  = "Workers";
 
 function doGet(e)  { return handleRequest(e); }
 function doPost(e) { return handleRequest(e); }
@@ -20,11 +21,13 @@ function handleRequest(e) {
 
     var action = params.action;
 
-    if      (action === "getProjects") output = getProjects();
-    else if (action === "logTime")     output = logTime(params);
-    else if (action === "getLogs")     output = getLogs(params);
-    else if (action === "editLog")     output = editLog(params);
-    else                               output = { error: "Unknown action: " + action };
+    if      (action === "getProjects")    output = getProjects();
+    else if (action === "logTime")        output = logTime(params);
+    else if (action === "getLogs")        output = getLogs(params);
+    else if (action === "editLog")        output = editLog(params);
+    else if (action === "saveWorkerRate") output = saveWorkerRate(params);
+    else if (action === "getWorkerRates") output = getWorkerRates(params);
+    else                                  output = { error: "Unknown action: " + action };
   } catch(err) {
     output = { error: err.toString() };
   }
@@ -155,6 +158,70 @@ function getLogs(params) {
   return { logs: logs.reverse(), isAdmin: isAdmin };
 }
 
+// ── Save / update a worker's rate ────────────────────────────────────────────
+function saveWorkerRate(params) {
+  var name = (params.workerName || "").toString().trim();
+  if (!name) return { error: "Name required" };
+
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_NAME_WORKERS);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAME_WORKERS);
+    sheet.appendRow(["Name", "Rate Type", "Rate Amount"]);
+    sheet.getRange(1,1,1,3).setFontWeight("bold").setBackground("#e8f0fe");
+    sheet.setFrozenRows(1);
+    sheet.setColumnWidth(1, 180);
+    sheet.setColumnWidth(2, 100);
+    sheet.setColumnWidth(3, 120);
+  }
+
+  var data    = sheet.getDataRange().getValues();
+  var nameCol = 0; // column A
+  var rowIndex = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][nameCol]).trim().toLowerCase() === name.toLowerCase()) {
+      rowIndex = i + 1; break;
+    }
+  }
+
+  var rateType   = (params.rateType   || "hourly").toString();
+  var rateAmount = parseFloat(params.rateAmount) || 0;
+
+  if (rowIndex === -1) {
+    sheet.appendRow([name, rateType, rateAmount]);
+  } else {
+    sheet.getRange(rowIndex, 2).setValue(rateType);
+    sheet.getRange(rowIndex, 3).setValue(rateAmount);
+  }
+
+  return { success: true };
+}
+
+// ── Get all worker rates (admin only) ─────────────────────────────────────────
+function getWorkerRates(params) {
+  // Require admin code to access pay rates
+  var adminCode  = (params.adminCode || "").toString().trim();
+  var storedCode = PropertiesService.getScriptProperties().getProperty("ADMIN_CODE");
+  if (!storedCode || adminCode !== storedCode) return { error: "Unauthorized" };
+
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_NAME_WORKERS);
+  if (!sheet) return { rates: {} };
+
+  var data  = sheet.getDataRange().getValues();
+  var rates = {};
+  for (var i = 1; i < data.length; i++) {
+    var wName = String(data[i][0]).trim();
+    if (wName) {
+      rates[wName] = {
+        rateType:   String(data[i][1] || "hourly"),
+        rateAmount: parseFloat(data[i][2]) || 0
+      };
+    }
+  }
+  return { rates: rates };
+}
+
 // ── Edit a log entry ─────────────────────────────────────────────────────────
 function editLog(params) {
   var ss    = SpreadsheetApp.getActiveSpreadsheet();
@@ -232,6 +299,17 @@ function setupSheets() {
     logSheet.setFrozenRows(1);
     var widths = [220,140,140,180,100,90,90,110,300,160];
     widths.forEach(function(w,i){ logSheet.setColumnWidth(i+1, w); });
+  }
+
+  var workerSheet = ss.getSheetByName(SHEET_NAME_WORKERS);
+  if (!workerSheet) {
+    workerSheet = ss.insertSheet(SHEET_NAME_WORKERS);
+    workerSheet.appendRow(["Name", "Rate Type", "Rate Amount"]);
+    workerSheet.getRange(1,1,1,3).setFontWeight("bold").setBackground("#e8f0fe");
+    workerSheet.setFrozenRows(1);
+    workerSheet.setColumnWidth(1, 180);
+    workerSheet.setColumnWidth(2, 100);
+    workerSheet.setColumnWidth(3, 120);
   }
 
   SpreadsheetApp.getUi().alert("✅ Setup complete!\n\nProjects tab now has a Category column with a dropdown.\nAdd your properties and assign each a category.");

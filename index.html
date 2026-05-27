@@ -532,17 +532,10 @@
 
     <div id="summary-content" style="display:none;">
       <div class="summary-header">
-        <h3 id="summary-title"></h3>
         <div class="summary-meta" id="summary-meta"></div>
       </div>
-      <table class="summary-table">
-        <thead>
-          <tr>
-            <th id="summary-col-header">Project</th>
-            <th>Hours</th>
-            <th>Amount</th>
-          </tr>
-        </thead>
+      <table class="summary-table" id="summary-table">
+        <thead id="summary-thead"></thead>
         <tbody id="summary-rows"></tbody>
       </table>
       <div class="summary-totals">
@@ -580,6 +573,10 @@
   let rateType     = localStorage.getItem("ft_rate_type")   || "hourly"; // "hourly"|"daily"
   let rateAmount   = parseFloat(localStorage.getItem("ft_rate_amount") || "0");
   let weekStartDay = parseInt(localStorage.getItem("ft_week_start_day") || "1", 10); // 0=Sun…6=Sat
+
+  // ── Summary state ─────────────────────────────────────────────────────────
+  let workerRates     = {};   // { "Name": { rateType, rateAmount } } — fetched from sheet
+  let lastSummaryData = null; // cached summary for printSummary()
 
   // ── Init ──────────────────────────────────────────────────────────────────
   document.addEventListener("DOMContentLoaded", () => {
@@ -670,6 +667,11 @@
     updateWorkerDisplay();
     closeWorkerModal();
     toast("Saved! 👋", "success");
+
+    // Sync rate to sheet in background (non-blocking)
+    apiFetch({ action: "saveWorkerRate", workerName: val, rateType: rType, rateAmount: rAmt })
+      .catch(err => console.warn("Rate sync failed:", err));
+
     if (document.getElementById("screen-history").classList.contains("active")) {
       loadHistory();
     }
@@ -1255,12 +1257,11 @@
     document.getElementById("summary-custom-range").style.display = opt === "custom" ? "" : "none";
   }
 
-  function generateSummary() {
+  async function generateSummary() {
     let fromISO, toISO;
     if (summaryOption === "current") {
       const range = getWeekRange(weekStartDay);
-      fromISO = range.start;
-      toISO   = range.end;
+      fromISO = range.start; toISO = range.end;
     } else {
       fromISO = document.getElementById("summary-from").value;
       toISO   = document.getElementById("summary-to").value;
@@ -1268,11 +1269,18 @@
       if (fromISO > toISO)    { toast("From date must be before To date.", "error"); return; }
     }
 
-    // Admin: respect selected worker ("" = all workers)
     const selectedWorker = isAdminMode
       ? (document.getElementById("summary-worker").value || "")
       : workerName;
     const groupByWorker = isAdminMode && selectedWorker === "";
+
+    // Fetch per-worker rates from sheet for all-workers view
+    if (groupByWorker) {
+      try {
+        const res = await apiFetch({ action: "getWorkerRates", adminCode });
+        workerRates = res.rates || {};
+      } catch(e) { workerRates = {}; }
+    }
 
     // Filter logs
     const filtered = allLogs.filter(log => {
@@ -1284,65 +1292,95 @@
       return true;
     });
 
-    // Aggregate by worker (admin all) or by project (default)
+    // Aggregate hours by group key
     const groupMap = {};
     filtered.forEach(log => {
       const key = groupByWorker
         ? (log["Worker Name"] || "Unknown Worker")
         : (log["Project"] || log["Category"] || "Unknown");
-      const hrs = parseDuration(log["Duration (hrs)"]);
       if (!groupMap[key]) groupMap[key] = 0;
-      groupMap[key] += hrs;
+      groupMap[key] += parseDuration(log["Duration (hrs)"]);
     });
 
-    const totalHrs = Object.values(groupMap).reduce((a, b) => a + b, 0);
-    const totalPay = calcPay(totalHrs);
-
-    // Build table rows
-    const rowsHTML = Object.entries(groupMap)
+    // Build rows — per-worker rates when groupByWorker, otherwise user's own rate
+    let totalHrs = 0, totalPaySum = 0, hasAnyPay = false;
+    const rowData = Object.entries(groupMap)
       .sort((a, b) => b[1] - a[1])
       .map(([label, hrs]) => {
-        const pay = calcPay(hrs);
-        return `<tr>
-          <td>${esc(label)}</td>
-          <td>${hrs.toFixed(2)}h</td>
-          <td>${pay !== null ? fmtPay(pay) : "—"}</td>
-        </tr>`;
-      }).join("");
+        totalHrs += hrs;
+        let pay = null, rateLabel = "";
+        if (groupByWorker) {
+          const wr = workerRates[label];
+          if (wr && wr.rateAmount > 0) {
+            pay = wr.rateType === "daily" ? (hrs / 8) * wr.rateAmount : hrs * wr.rateAmount;
+            rateLabel = wr.rateType === "daily"
+              ? `$${wr.rateAmount.toFixed(2)}/day`
+              : `$${wr.rateAmount.toFixed(2)}/hr`;
+            hasAnyPay = true; totalPaySum += pay;
+          } else { rateLabel = "—"; }
+        } else {
+          pay = calcPay(hrs);
+          if (pay !== null) { hasAnyPay = true; totalPaySum += pay; }
+        }
+        return { label, hrs, rateLabel, pay };
+      });
 
-    // Rate description
-    const rateDesc = rateAmount > 0
+    const totalPay = hasAnyPay ? totalPaySum : null;
+
+    // Table HTML
+    const colSpan = groupByWorker ? 4 : 3;
+    const theadHTML = groupByWorker
+      ? `<tr><th>Worker</th><th>Rate</th><th>Hours</th><th>Amount</th></tr>`
+      : `<th>Project</th><th>Hours</th><th>Amount</th>`;
+    const rowsHTML = rowData.length
+      ? rowData.map(r => groupByWorker
+          ? `<tr><td>${esc(r.label)}</td><td>${r.rateLabel}</td><td>${r.hrs.toFixed(2)}h</td><td>${r.pay !== null ? fmtPay(r.pay) : "—"}</td></tr>`
+          : `<tr><td>${esc(r.label)}</td><td>${r.hrs.toFixed(2)}h</td><td>${r.pay !== null ? fmtPay(r.pay) : "—"}</td></tr>`
+        ).join("")
+      : `<tr><td colspan="${colSpan}" style="color:var(--text3);padding-top:12px;">No entries in this range.</td></tr>`;
+
+    // Meta block — hide rate line for all-workers admin view
+    const summaryFor = groupByWorker ? "All workers" : (selectedWorker || workerName || "—");
+    const rateDesc   = rateAmount > 0
       ? (rateType === "daily" ? `$${rateAmount.toFixed(2)}/day (8h day)` : `$${rateAmount.toFixed(2)}/hr`)
       : "No rate set";
-
-    // Summary label: who is this for?
-    const summaryFor = groupByWorker ? "All workers" : (selectedWorker || workerName || "—");
-    const colHeader  = groupByWorker ? "Worker" : "Project";
-
-    document.getElementById("summary-col-header").textContent = colHeader;
-    document.getElementById("summary-title").textContent =
-      summaryFor + " · " + formatDateShort(fromISO) + " – " + formatDateShort(toISO);
-    document.getElementById("summary-meta").innerHTML =
+    const metaHTML =
       `<strong style="color:var(--text)">${esc(summaryFor)}</strong><br>` +
-      `${formatDateLong(fromISO)} – ${formatDateLong(toISO)}<br>Rate: ${rateDesc}`;
-    document.getElementById("summary-rows").innerHTML = rowsHTML ||
-      `<tr><td colspan="3" style="color:var(--text3); padding-top:12px;">No entries in this range.</td></tr>`;
+      `${formatDateLong(fromISO)} – ${formatDateLong(toISO)}` +
+      (groupByWorker ? "" : `<br>Rate: ${rateDesc}`);
+
+    // Render modal
+    document.getElementById("summary-thead").innerHTML = theadHTML;
+    document.getElementById("summary-meta").innerHTML  = metaHTML;
+    document.getElementById("summary-rows").innerHTML  = rowsHTML;
     document.getElementById("summary-total-hrs").textContent = totalHrs.toFixed(2) + "h";
     document.getElementById("summary-total-pay").textContent = totalPay !== null ? fmtPay(totalPay) : "—";
-
     document.getElementById("summary-date-selector").style.display = "none";
     document.getElementById("summary-content").style.display = "";
+
+    // Cache for print
+    lastSummaryData = { summaryFor, fromISO, toISO, groupByWorker, rateDesc, rowData, totalHrs, totalPay };
   }
 
   function printSummary() {
-    const title    = document.getElementById("summary-title").textContent;
-    const colHdr   = document.getElementById("summary-col-header").textContent;
-    const metaEl   = document.getElementById("summary-meta");
-    // Extract plain text lines from meta (strip HTML tags)
-    const metaLines = metaEl.innerText || metaEl.textContent;
-    const rows     = document.getElementById("summary-rows").innerHTML;
-    const totalHrs = document.getElementById("summary-total-hrs").textContent;
-    const totalPay = document.getElementById("summary-total-pay").textContent;
+    if (!lastSummaryData) { toast("Generate a summary first.", "error"); return; }
+    const { summaryFor, fromISO, toISO, groupByWorker, rateDesc, rowData, totalHrs, totalPay } = lastSummaryData;
+
+    const title = `${summaryFor} · ${formatDateShort(fromISO)} – ${formatDateShort(toISO)}`;
+    const metaTxt = summaryFor + "\n" +
+      formatDateLong(fromISO) + " – " + formatDateLong(toISO) +
+      (groupByWorker ? "" : "\nRate: " + rateDesc);
+
+    const theadRow = groupByWorker
+      ? `<tr><th>Worker</th><th>Rate</th><th>Hours</th><th>Amount</th></tr>`
+      : `<tr><th>Project</th><th>Hours</th><th>Amount</th></tr>`;
+
+    const tbodyRows = rowData.map(r => groupByWorker
+      ? `<tr><td>${r.label}</td><td>${r.rateLabel}</td><td>${r.hrs.toFixed(2)}h</td><td>${r.pay !== null ? fmtPay(r.pay) : "—"}</td></tr>`
+      : `<tr><td>${r.label}</td><td>${r.hrs.toFixed(2)}h</td><td>${r.pay !== null ? fmtPay(r.pay) : "—"}</td></tr>`
+    ).join("");
+
+    const totalPayStr = totalPay !== null ? fmtPay(totalPay) : "—";
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -1351,31 +1389,33 @@
   <title>Punchcard – ${title}</title>
   <style>
     @media print { @page { margin: 1.2cm 1.5cm; } }
-    body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #111; background: #fff; padding: 32px; max-width: 680px; margin: 0 auto; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #111; background: #fff; padding: 32px; max-width: 720px; margin: 0 auto; }
     h1 { font-size: 19px; font-weight: 700; margin: 0 0 10px; }
     .meta { font-size: 13px; color: #555; line-height: 1.8; margin-bottom: 24px; white-space: pre-line; }
     table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
     th { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #888; text-align: left; padding: 0 0 8px; border-bottom: 2px solid #ddd; }
-    th:nth-child(2), td:nth-child(2) { text-align: right; padding-right: 20px; }
+    th:nth-child(2) { text-align: right; padding-right: 20px; }
+    th:nth-child(3), td:nth-child(3) { text-align: right; padding-right: 20px; }
     th:last-child, td:last-child { text-align: right; }
     td { font-size: 14px; padding: 9px 0; border-bottom: 1px solid #eee; color: #111; }
+    td:nth-child(2) { text-align: right; padding-right: 20px; color: #555; }
     .totals { display: flex; justify-content: space-between; padding-top: 14px; font-size: 15px; font-weight: 700; border-top: 2px solid #ddd; }
     .totals-right { display: flex; gap: 36px; }
     .green { color: #2e7d4f; }
   </style>
 </head>
 <body>
-  <h1>${title}</h1>
-  <div class="meta">${metaLines}</div>
+  <h1>Weekly Summary</h1>
+  <div class="meta">${metaTxt}</div>
   <table>
-    <thead><tr><th>${colHdr}</th><th>Hours</th><th>Amount</th></tr></thead>
-    <tbody>${rows}</tbody>
+    <thead>${theadRow}</thead>
+    <tbody>${tbodyRows}</tbody>
   </table>
   <div class="totals">
     <span>Total</span>
     <div class="totals-right">
-      <span>${totalHrs}</span>
-      <span class="green">${totalPay}</span>
+      <span>${totalHrs.toFixed(2)}h</span>
+      <span class="green">${totalPayStr}</span>
     </div>
   </div>
 </body>
@@ -1385,7 +1425,6 @@
     if (!win) { toast("Allow pop-ups to generate PDF.", "error"); return; }
     win.document.write(html);
     win.document.close();
-    // Wait for load then open print dialog (browser always includes Save as PDF)
     win.onload = () => { win.focus(); win.print(); };
   }
 
