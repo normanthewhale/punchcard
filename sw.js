@@ -1,4 +1,4 @@
-const CACHE = "punchcard-v5";
+const CACHE = "punchcard-v6";
 const ASSETS = ["./index.html", "./manifest.json"];
 
 self.addEventListener("install", e => {

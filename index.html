@@ -427,7 +427,7 @@
     <div class="card">
       <div class="card-title">Timer</div>
       <div class="timer-wrap">
-        <div class="timer-clock" id="timer-display">00:00:00</div>
+        <div class="timer-clock" id="timer-clock">00:00:00</div>
         <div class="timer-status" id="timer-status">Ready to clock in</div>
         <div class="timer-started-at" id="timer-started-at"></div>
       </div>
@@ -608,7 +608,7 @@
     var elClock   = document.getElementById("timer-clock");
     var elStatus  = document.getElementById("timer-status");
     var elStartAt = document.getElementById("timer-started-at");
-    var elDisplay = document.getElementById("timer-display");
+    var elDisplay = document.getElementById("timer-clock");
 
     if (!elStart || !elStop || !elSubmit || !elClock || !elStatus || !elStartAt || !elDisplay) {
       console.error("startTimer: missing element(s)", {
@@ -642,7 +642,7 @@
 
   function tickTimer() {
     try {
-      document.getElementById("timer-display").textContent = fmtElapsed(Date.now() - startTimestamp);
+      document.getElementById("timer-clock").textContent = fmtElapsed(Date.now() - startTimestamp);
     } catch (err) {
       clearInterval(timerInterval);
       console.error("tickTimer error:", err);
@@ -659,7 +659,7 @@
     document.getElementById("timer-clock").className     = "timer-clock stopped";
     document.getElementById("timer-status").textContent  = "Clocked out";
     document.getElementById("timer-started-at").textContent = "";
-    document.getElementById("timer-display").textContent = fmtElapsed(endTimestamp - startTimestamp);
+    document.getElementById("timer-clock").textContent = fmtElapsed(endTimestamp - startTimestamp);
 
     const startDate = new Date(startTimestamp);
     const endDate   = new Date(endTimestamp);
@@ -673,7 +673,7 @@
 
   function cancelSubmit() {
     document.getElementById("submit-card").style.display  = "none";
-    document.getElementById("timer-display").textContent  = "00:00:00";
+    document.getElementById("timer-clock").textContent  = "00:00:00";
     document.getElementById("timer-clock").className      = "timer-clock";
     document.getElementById("timer-status").textContent   = "Ready to clock in";
     startTimestamp = null;
@@ -728,7 +728,7 @@
         document.getElementById("f-desc").value    = "";
         document.getElementById("f-project").value = "";
         document.getElementById("submit-card").style.display  = "none";
-        document.getElementById("timer-display").textContent  = "00:00:00";
+        document.getElementById("timer-clock").textContent  = "00:00:00";
         document.getElementById("timer-clock").className      = "timer-clock";
         document.getElementById("timer-status").textContent   = "Ready to clock in";
         startTimestamp = null;
