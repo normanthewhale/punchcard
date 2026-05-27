@@ -390,11 +390,12 @@
     if (!isStandalone) document.getElementById("install-banner").style.display = "block";
 
     // ── Persistent timer restore ──────────────────────────────────────────
-    // Now that the element ID bug is fixed this is safe to restore
     const saved = localStorage.getItem("ft_timer_start");
     if (saved) {
-      const ts = parseInt(saved, 10);
-      if (!isNaN(ts) && ts > 0) {
+      const ts  = parseInt(saved, 10);
+      const age = Date.now() - ts;
+      // Discard any saved timer older than 16 hours — treat it as abandoned
+      if (!isNaN(ts) && ts > 0 && age < 16 * 3600 * 1000) {
         startTimestamp = ts;
         restoreTimer();
       } else {

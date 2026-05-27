@@ -178,10 +178,71 @@ function setupSheets() {
   SpreadsheetApp.getUi().alert("✅ Setup complete!\n\nProjects tab now has a Category column with a dropdown.\nAdd your properties and assign each a category.");
 }
 
+// ── Fix column structure (run once if sheet predates the Category+Project feature) ─
+function migrateAddProjectColumn() {
+  var ss       = SpreadsheetApp.getActiveSpreadsheet();
+  var logSheet = ss.getSheetByName(SHEET_NAME_LOGS);
+  if (!logSheet) {
+    SpreadsheetApp.getUi().alert("❌ No TimeLogs sheet found. Run 'Set up sheets' first.");
+    return;
+  }
+
+  var lastCol = logSheet.getLastColumn();
+  var headers = logSheet.getRange(1, 1, 1, lastCol).getValues()[0].map(String);
+
+  var hasCategory = headers.indexOf("Category") !== -1;
+  var hasProject  = headers.indexOf("Project")  !== -1;
+
+  if (hasCategory && hasProject) {
+    SpreadsheetApp.getUi().alert("✅ Both Category and Project columns already exist — no migration needed.");
+    return;
+  }
+
+  if (hasProject && !hasCategory) {
+    // Column C is labeled "Project" but holds Category data.
+    // Fix: rename C → "Category", insert blank "Project" as new column D.
+    var projectCol = headers.indexOf("Project") + 1; // 1-based
+    logSheet.getRange(1, projectCol).setValue("Category");
+    logSheet.insertColumnAfter(projectCol);
+    var newCol = logSheet.getRange(1, projectCol + 1);
+    newCol.setValue("Project");
+    newCol.setFontWeight("bold").setBackground("#e8f0fe");
+    logSheet.setColumnWidth(projectCol + 1, 180);
+
+    SpreadsheetApp.getUi().alert(
+      "✅ Migration complete!\n\n" +
+      "• Column C renamed from \"Project\" → \"Category\" (data was already correct)\n" +
+      "• New blank \"Project\" column inserted as column D\n\n" +
+      "Existing rows will have a blank Project cell.\n" +
+      "Please delete any test entries with bad/shifted data, then log a fresh entry."
+    );
+    return;
+  }
+
+  if (hasCategory && !hasProject) {
+    // Category exists but Project is missing — insert Project after Category.
+    var categoryCol = headers.indexOf("Category") + 1;
+    logSheet.insertColumnAfter(categoryCol);
+    var newCol2 = logSheet.getRange(1, categoryCol + 1);
+    newCol2.setValue("Project");
+    newCol2.setFontWeight("bold").setBackground("#e8f0fe");
+    logSheet.setColumnWidth(categoryCol + 1, 180);
+
+    SpreadsheetApp.getUi().alert(
+      "✅ \"Project\" column inserted after Category.\n\n" +
+      "Please delete any test entries with bad/shifted data, then log a fresh entry."
+    );
+    return;
+  }
+
+  SpreadsheetApp.getUi().alert("❌ Could not determine correct column structure. Check your header row.");
+}
+
 // ── Spreadsheet menu ──────────────────────────────────────────────────────────
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("⏱ Punchcard")
     .addItem("Set up sheets", "setupSheets")
+    .addItem("Fix columns (add missing Project column)", "migrateAddProjectColumn")
     .addToUi();
 }
