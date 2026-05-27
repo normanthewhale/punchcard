@@ -66,22 +66,31 @@ function logTime(params) {
   }
 
   var id          = Utilities.getUuid();
+  var tz          = Session.getScriptTimeZone();
   var now         = new Date();
   var startDT     = new Date(params.startTime);
   var endDT       = new Date(params.endTime);
   var durationHrs = ((endDT - startDT) / 3600000).toFixed(2);
+
+  // Pre-format the next row's date/time columns as plain text so Sheets
+  // doesn't auto-convert the formatted strings back into date/time cell types.
+  var nextRow = sheet.getLastRow() + 1;
+  sheet.getRange(nextRow, 5).setNumberFormat("@");   // Date
+  sheet.getRange(nextRow, 6).setNumberFormat("@");   // Start Time
+  sheet.getRange(nextRow, 7).setNumberFormat("@");   // End Time
+  sheet.getRange(nextRow, 8).setNumberFormat("0.00"); // Duration (hrs)
 
   sheet.appendRow([
     id,
     params.workerName   || "",
     params.category     || "",
     params.project      || "",
-    Utilities.formatDate(startDT, Session.getScriptTimeZone(), "yyyy-MM-dd"),
-    Utilities.formatDate(startDT, Session.getScriptTimeZone(), "h:mm a"),
-    Utilities.formatDate(endDT,   Session.getScriptTimeZone(), "h:mm a"),
+    Utilities.formatDate(startDT, tz, "yyyy-MM-dd"),
+    Utilities.formatDate(startDT, tz, "h:mm a"),
+    Utilities.formatDate(endDT,   tz, "h:mm a"),
     parseFloat(durationHrs),
     params.description  || "",
-    Utilities.formatDate(now, Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss")
+    Utilities.formatDate(now, tz, "yyyy-MM-dd HH:mm:ss")
   ]);
 
   return { success: true, id: id, duration: durationHrs };
@@ -94,13 +103,30 @@ function getLogs(params) {
   if (!sheet) return { logs: [] };
 
   var data    = sheet.getDataRange().getValues();
-  var headers = data[0];
+  var headers = data[0].map(String);
+  var tz      = Session.getScriptTimeZone();
   var logs    = [];
 
   for (var i = 1; i < data.length; i++) {
     var row = {};
     for (var j = 0; j < headers.length; j++) {
-      row[headers[j]] = data[i][j];
+      var val    = data[i][j];
+      var header = headers[j];
+      // Sheets auto-converts date/time strings to Date objects on read.
+      // Convert them back to the string format the frontend expects.
+      if (val instanceof Date) {
+        if (header === "Date") {
+          val = Utilities.formatDate(val, tz, "yyyy-MM-dd");
+        } else if (header === "Start Time" || header === "End Time") {
+          val = Utilities.formatDate(val, tz, "h:mm a");
+        } else if (header === "Duration (hrs)") {
+          // Time-formatted duration: extract hours from the UTC time component
+          val = parseFloat((val.getUTCHours() + val.getUTCMinutes() / 60 + val.getUTCSeconds() / 3600).toFixed(2));
+        } else {
+          val = Utilities.formatDate(val, tz, "yyyy-MM-dd HH:mm:ss");
+        }
+      }
+      row[header] = val;
     }
     logs.push(row);
   }
