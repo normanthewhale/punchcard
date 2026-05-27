@@ -194,6 +194,67 @@
     #install-banner strong { color: var(--text); display: block; margin-bottom: 4px; }
 
     .results-count { font-size: 12px; color: var(--text3); margin-bottom: 12px; text-align: right; }
+
+    /* ── Rate display ── */
+    .stat-pay { font-size: 13px; color: var(--green); margin-top: 3px; font-weight: 600; }
+    .log-pay  { font-size: 12px; color: var(--green); font-weight: 600; margin-top: 2px; }
+
+    /* ── Log actions ── */
+    .log-actions { display: flex; justify-content: flex-end; margin-top: 10px; }
+    .btn-edit-log {
+      background: none; border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text2); font-size: 12px; font-weight: 600; padding: 5px 12px;
+      cursor: pointer; transition: border-color .15s, color .15s;
+    }
+    .btn-edit-log:hover { border-color: var(--orange); color: var(--orange); }
+
+    /* ── Edit modal ── */
+    .modal-scroll { max-height: 80vh; overflow-y: auto; }
+
+    /* ── Summary button ── */
+    .btn-summary {
+      width: 100%; padding: 13px; border: 1px solid var(--orange); border-radius: var(--radius);
+      background: none; color: var(--orange); font-size: 15px; font-weight: 600;
+      cursor: pointer; margin-bottom: 16px; transition: background .15s;
+    }
+    .btn-summary:hover { background: rgba(232,119,58,0.08); }
+
+    /* ── Summary modal content ── */
+    .summary-header { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+    .summary-header h3 { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+    .summary-meta { font-size: 13px; color: var(--text2); line-height: 1.7; }
+    .summary-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    .summary-table th { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text3); text-align: left; padding: 0 0 8px; border-bottom: 1px solid var(--border); }
+    .summary-table th:last-child, .summary-table td:last-child { text-align: right; }
+    .summary-table td { font-size: 14px; padding: 10px 0; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: top; }
+    .summary-table td:nth-child(2), .summary-table th:nth-child(2) { text-align: right; padding-right: 16px; }
+    .summary-totals { display: flex; justify-content: space-between; padding-top: 12px; font-size: 15px; font-weight: 700; }
+    .summary-totals span:last-child { color: var(--green); }
+    .summary-date-selector { margin-bottom: 20px; }
+    .radio-group { display: flex; gap: 10px; margin-bottom: 14px; }
+    .radio-btn {
+      flex: 1; padding: 10px; border: 1px solid var(--border); border-radius: 10px;
+      background: var(--bg3); color: var(--text2); font-size: 14px; font-weight: 500;
+      cursor: pointer; text-align: center; transition: all .15s;
+    }
+    .radio-btn.active { border-color: var(--orange); color: var(--orange); background: rgba(232,119,58,0.08); }
+
+    /* ── Rate inputs in profile modal ── */
+    .rate-row { display: flex; gap: 10px; }
+    .rate-row > div:first-child { flex: 0 0 120px; }
+    .rate-row > div:last-child { flex: 1; }
+
+    /* ── Print styles ── */
+    @media print {
+      body { background: #fff !important; color: #000 !important; }
+      #app, header, nav, #screen-clock, .filter-bar, .stats-grid,
+      .btn-summary, .modal-bg:not(#summary-modal) { display: none !important; }
+      #summary-modal { display: block !important; position: static !important; background: none !important; }
+      #summary-modal .modal { border: none !important; background: #fff !important; color: #000 !important; box-shadow: none !important; border-radius: 0 !important; padding: 0 !important; }
+      .summary-table th, .summary-table td { color: #000 !important; border-color: #ccc !important; }
+      .summary-meta { color: #555 !important; }
+      #summary-print-btn, #summary-close-btn, #summary-date-selector { display: none !important; }
+    }
   </style>
 </head>
 <body>
@@ -296,11 +357,13 @@
         <div class="stat-value" id="stat-today">0h</div>
         <div class="stat-label">Today</div>
         <div class="stat-sublabel" id="stat-today-date"></div>
+        <div class="stat-pay" id="stat-today-pay" style="display:none;"></div>
       </div>
       <div class="stat-card">
         <div class="stat-value" id="stat-week">0h</div>
         <div class="stat-label">This week</div>
         <div class="stat-sublabel" id="stat-week-range"></div>
+        <div class="stat-pay" id="stat-week-pay" style="display:none;"></div>
       </div>
     </div>
 
@@ -341,6 +404,8 @@
       <button class="btn btn-secondary btn-filter-clear" style="margin-top:12px;" onclick="clearFilters()">Clear filters</button>
     </div>
 
+    <button class="btn-summary" onclick="openSummaryModal()">📄 Generate Weekly Summary</button>
+
     <div class="card" style="margin-bottom:8px;">
       <div style="display:flex; justify-content:space-between; align-items:center;">
         <span style="font-size:11px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:var(--text3);">Recent logs</span>
@@ -357,16 +422,50 @@
 
 </div><!-- /app -->
 
-<!-- Worker name modal -->
+<!-- Worker / Profile modal -->
 <div class="modal-bg" id="worker-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-  <div class="modal">
-    <h2 id="modal-title">Your name</h2>
-    <label for="worker-input">Enter your name</label>
+  <div class="modal modal-scroll">
+    <h2 id="modal-title">Your profile</h2>
+    <label for="worker-input">Your name</label>
     <input type="text" id="worker-input" placeholder="e.g. Mike, Sarah…" autocomplete="name" style="font-size:18px;" />
+
+    <!-- Rate settings -->
+    <div style="margin-top:4px; padding-top:16px; border-top:1px solid var(--border); margin-bottom:4px;">
+      <p style="font-size:12px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:var(--text3); margin-bottom:12px;">Pay rate</p>
+      <div class="rate-row">
+        <div>
+          <label for="rate-type-select">Rate type</label>
+          <select id="rate-type-select">
+            <option value="hourly">Hourly</option>
+            <option value="daily">Daily (8h)</option>
+          </select>
+        </div>
+        <div>
+          <label for="rate-amount-input">Amount ($)</label>
+          <input type="text" id="rate-amount-input" placeholder="0.00" inputmode="decimal" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Week settings -->
+    <div style="padding-top:4px; border-top:1px solid var(--border); margin-bottom:16px;">
+      <p style="font-size:12px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; margin-top:12px;">Week start</p>
+      <label for="week-start-select">Week starts on</label>
+      <select id="week-start-select">
+        <option value="0">Sunday</option>
+        <option value="1">Monday</option>
+        <option value="2">Tuesday</option>
+        <option value="3">Wednesday</option>
+        <option value="4">Thursday</option>
+        <option value="5">Friday</option>
+        <option value="6">Saturday</option>
+      </select>
+    </div>
+
     <button class="btn btn-submit" onclick="saveWorkerName()">Save</button>
     <button class="btn btn-secondary" style="margin-top:10px;" onclick="closeWorkerModal()">Cancel</button>
 
-    <!-- Admin access — hidden by default, expands when toggled -->
+    <!-- Admin access -->
     <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border);">
       <button id="admin-toggle-btn" onclick="toggleAdminSection()" style="background:none; border:none; color:var(--text3); font-size:12px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; cursor:pointer; padding:0; display:flex; align-items:center; gap:6px;">
         <span id="admin-toggle-icon">▸</span> Admin access
@@ -376,6 +475,82 @@
         <input type="text" id="admin-input" placeholder="Enter passcode…" autocomplete="off" />
         <p style="font-size:12px; color:var(--text3); margin-top:-10px; margin-bottom:0; line-height:1.5;">Unlocks all-worker view in History. Leave blank for standard access (your entries only).</p>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit log modal -->
+<div class="modal-bg" id="edit-modal" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h2>Edit Entry</h2>
+    <input type="hidden" id="edit-log-id" />
+    <div class="field-row">
+      <div>
+        <label for="edit-start">Start time</label>
+        <input type="time" id="edit-start" />
+      </div>
+      <div>
+        <label for="edit-end">End time</label>
+        <input type="time" id="edit-end" />
+      </div>
+    </div>
+    <label for="edit-desc">Description</label>
+    <textarea id="edit-desc" rows="3"></textarea>
+    <button class="btn btn-submit" id="edit-save-btn" onclick="saveEditLog()">Save changes</button>
+    <button class="btn btn-secondary" style="margin-top:10px;" onclick="closeEditModal()">Cancel</button>
+  </div>
+</div>
+
+<!-- Weekly summary modal -->
+<div class="modal-bg" id="summary-modal" role="dialog" aria-modal="true">
+  <div class="modal modal-scroll">
+    <h2>Weekly Summary</h2>
+
+    <div id="summary-date-selector" class="summary-date-selector">
+      <div class="radio-group">
+        <div class="radio-btn active" id="summary-opt-current" onclick="setSummaryOption('current')">Current week</div>
+        <div class="radio-btn" id="summary-opt-custom" onclick="setSummaryOption('custom')">Custom range</div>
+      </div>
+      <div id="summary-custom-range" style="display:none;">
+        <div class="field-row">
+          <div>
+            <label for="summary-from">From</label>
+            <input type="date" id="summary-from" />
+          </div>
+          <div>
+            <label for="summary-to">To</label>
+            <input type="date" id="summary-to" />
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-submit" onclick="generateSummary()">Generate</button>
+    </div>
+
+    <div id="summary-content" style="display:none;">
+      <div class="summary-header">
+        <h3 id="summary-title"></h3>
+        <div class="summary-meta" id="summary-meta"></div>
+      </div>
+      <table class="summary-table">
+        <thead>
+          <tr>
+            <th>Project</th>
+            <th>Hours</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody id="summary-rows"></tbody>
+      </table>
+      <div class="summary-totals">
+        <span>Total</span>
+        <span id="summary-total-hrs"></span>
+        <span id="summary-total-pay"></span>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:20px;">
+        <button class="btn btn-submit" id="summary-print-btn" onclick="window.print()" style="flex:1;">Print / Save PDF</button>
+        <button class="btn btn-secondary" id="summary-close-btn" onclick="closeSummaryModal()" style="flex:1;">Close</button>
+      </div>
+      <button onclick="showSummarySelector()" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;margin-top:12px;padding:0;">← Change date range</button>
     </div>
   </div>
 </div>
@@ -393,9 +568,14 @@
   let workerName       = localStorage.getItem("ft_worker") || "";
   let adminCode        = localStorage.getItem("ft_admin_code") || "";
   let isAdminMode      = false;
-  let allProjects      = [];   // [{ name, category }]
-  let allLogs          = [];   // full fetched log list
-  let selectedCategory = "";   // category selected on clock-out form
+  let allProjects      = [];
+  let allLogs          = [];
+  let selectedCategory = "";
+
+  // ── User preferences ──────────────────────────────────────────────────────
+  let rateType     = localStorage.getItem("ft_rate_type")   || "hourly"; // "hourly"|"daily"
+  let rateAmount   = parseFloat(localStorage.getItem("ft_rate_amount") || "0");
+  let weekStartDay = parseInt(localStorage.getItem("ft_week_start_day") || "1", 10); // 0=Sun…6=Sat
 
   // ── Init ──────────────────────────────────────────────────────────────────
   document.addEventListener("DOMContentLoaded", () => {
@@ -437,9 +617,11 @@
 
   // ── Worker name ───────────────────────────────────────────────────────────
   function openWorkerModal() {
-    document.getElementById("worker-input").value = workerName;
-    document.getElementById("admin-input").value  = adminCode;
-    // Auto-expand admin section if a code is already saved
+    document.getElementById("worker-input").value      = workerName;
+    document.getElementById("admin-input").value       = adminCode;
+    document.getElementById("rate-type-select").value  = rateType;
+    document.getElementById("rate-amount-input").value = rateAmount > 0 ? rateAmount.toString() : "";
+    document.getElementById("week-start-select").value = weekStartDay.toString();
     if (adminCode) {
       document.getElementById("admin-section").style.display = "block";
       document.getElementById("admin-toggle-icon").textContent = "▾";
@@ -463,16 +645,27 @@
   function saveWorkerName() {
     const val  = document.getElementById("worker-input").value.trim();
     if (!val) { toast("Please enter your name.", "error"); return; }
-    const code = document.getElementById("admin-input").value.trim();
-    workerName = val;
-    adminCode  = code;
+    const code    = document.getElementById("admin-input").value.trim();
+    const rType   = document.getElementById("rate-type-select").value;
+    const rAmt    = parseFloat(document.getElementById("rate-amount-input").value) || 0;
+    const wkStart = parseInt(document.getElementById("week-start-select").value, 10);
+
+    workerName   = val;
+    adminCode    = code;
+    rateType     = rType;
+    rateAmount   = rAmt;
+    weekStartDay = wkStart;
+
     localStorage.setItem("ft_worker", val);
+    localStorage.setItem("ft_rate_type",      rType);
+    localStorage.setItem("ft_rate_amount",     rAmt.toString());
+    localStorage.setItem("ft_week_start_day",  wkStart.toString());
     if (code) { localStorage.setItem("ft_admin_code", code); }
     else      { localStorage.removeItem("ft_admin_code"); }
+
     updateWorkerDisplay();
     closeWorkerModal();
     toast("Saved! 👋", "success");
-    // Reload history so admin/regular mode takes effect immediately
     if (document.getElementById("screen-history").classList.contains("active")) {
       loadHistory();
     }
@@ -781,62 +974,94 @@
       const startFmt = normalizeTime(log["Start Time"]);
       const endFmt   = normalizeTime(log["End Time"]);
       const durStr   = dur >= 0.1 ? dur.toFixed(2) + "h" : (dur * 60).toFixed(0) + "m";
-      // Show worker name only in admin mode (regular users always see their own data)
+      const pay      = calcPay(dur);
+      const payStr   = pay !== null ? fmtPay(pay) : "";
       const workerLine = (isAdminMode && log["Worker Name"])
         ? `<span class="log-worker">${esc(log["Worker Name"])}</span>` : "";
+      const logId    = esc(log["ID"] || "");
+      // Encode edit data safely for onclick
+      const editData = encodeURIComponent(JSON.stringify({
+        id:    log["ID"] || "",
+        start: amPmToHHMM(log["Start Time"]),
+        end:   amPmToHHMM(log["End Time"]),
+        desc:  log["Description"] || ""
+      }));
       return `<div class="log-item">
         <div class="log-top">
           <div class="log-project">${esc(project)}</div>
-          <div class="log-duration">${durStr}</div>
+          <div style="text-align:right;">
+            <div class="log-duration">${durStr}</div>
+            ${payStr ? `<div class="log-pay">${payStr}</div>` : ""}
+          </div>
         </div>
         <div class="log-time">${esc(dateLong)} &nbsp;·&nbsp; ${esc(startFmt)} – ${esc(endFmt)}</div>
-        <div class="log-desc">${esc(log["Description"])}</div>
-        ${workerLine ? `<div class="log-meta">${workerLine}</div>` : ""}
+        ${log["Description"] ? `<div class="log-desc">${esc(log["Description"])}</div>` : ""}
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+          ${workerLine ? `<div class="log-meta">${workerLine}</div>` : "<div></div>"}
+          <button class="btn-edit-log" onclick="openEditModal(decodeURIComponent('${editData}'))">Edit</button>
+        </div>
       </div>`;
     }).join("");
   }
 
   function renderStats(logs) {
-    const today       = localDateISO(new Date());
-    const sundayISO   = getSundayISO();
-    const saturdayISO = getSaturdayISO();
-    const sundayFmt   = formatDateShort(sundayISO);
-    const saturdayFmt = formatDateShort(saturdayISO);
+    const today = localDateISO(new Date());
+    const { start: weekStart, end: weekEnd } = getWeekRange(weekStartDay);
+    const weekEndDay = weekStartDay === 0 ? 6 : weekStartDay - 1;
 
     let todayHrs = 0, weekHrs = 0;
     logs.forEach(log => {
       const d   = normalizeDate(log["Date"]);
       const hrs = parseDuration(log["Duration (hrs)"]);
       if (d === today) todayHrs += hrs;
-      if (d >= sundayISO && d <= saturdayISO) weekHrs += hrs;
+      if (d >= weekStart && d <= weekEnd) weekHrs += hrs;
     });
 
     document.getElementById("stat-today").textContent      = todayHrs.toFixed(1) + "h";
     document.getElementById("stat-today-date").textContent = formatDateShort(today);
     document.getElementById("stat-week").textContent       = weekHrs.toFixed(1) + "h";
-    document.getElementById("stat-week-range").textContent = sundayFmt + " – " + saturdayFmt;
+    document.getElementById("stat-week-range").textContent = formatDateShort(weekStart) + " – " + formatDateShort(weekEnd);
     document.getElementById("stats-grid").style.display    = "grid";
+
+    // Pay display
+    const todayPay = calcPay(todayHrs);
+    const weekPay  = calcPay(weekHrs);
+    const todayPayEl = document.getElementById("stat-today-pay");
+    const weekPayEl  = document.getElementById("stat-week-pay");
+    if (todayPay !== null) {
+      todayPayEl.textContent = fmtPay(todayPay);
+      todayPayEl.style.display = "";
+    } else { todayPayEl.style.display = "none"; }
+    if (weekPay !== null) {
+      weekPayEl.textContent = fmtPay(weekPay);
+      weekPayEl.style.display = "";
+    } else { weekPayEl.style.display = "none"; }
   }
 
-  // Returns YYYY-MM-DD using local calendar date (avoids UTC offset edge cases)
+  // Returns YYYY-MM-DD using local calendar date
   function localDateISO(d) {
     return d.getFullYear() + "-" +
       String(d.getMonth() + 1).padStart(2, "0") + "-" +
       String(d.getDate()).padStart(2, "0");
   }
 
-  // Returns Sunday of the current week as YYYY-MM-DD
-  function getSundayISO() {
+  // Returns { start, end } ISO dates for the current week given a start day (0=Sun…6=Sat)
+  function getWeekRange(startDay) {
     const d = new Date();
-    d.setDate(d.getDate() - d.getDay());
-    return localDateISO(d);
+    let diff = d.getDay() - startDay;
+    if (diff < 0) diff += 7;
+    const start = new Date(d); start.setDate(d.getDate() - diff);
+    const end   = new Date(start); end.setDate(start.getDate() + 6);
+    return { start: localDateISO(start), end: localDateISO(end) };
   }
 
-  // Returns Saturday of the current week as YYYY-MM-DD
-  function getSaturdayISO() {
-    const d = new Date();
-    d.setDate(d.getDate() + (6 - d.getDay()));
-    return localDateISO(d);
+  // ── Pay helpers ───────────────────────────────────────────────────────────
+  function calcPay(hrs) {
+    if (!rateAmount || rateAmount <= 0) return null;
+    return rateType === "daily" ? (hrs / 8) * rateAmount : hrs * rateAmount;
+  }
+  function fmtPay(amount) {
+    return "$" + amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
   // Formats YYYY-MM-DD as "May 18"
@@ -932,8 +1157,164 @@
     setTimeout(() => { el.className = type; }, 3000);
   }
 
+  // ── Edit log modal ────────────────────────────────────────────────────────
+  function openEditModal(jsonStr) {
+    let data;
+    try { data = JSON.parse(jsonStr); } catch(e) { toast("Could not open entry.", "error"); return; }
+    document.getElementById("edit-log-id").value  = data.id   || "";
+    document.getElementById("edit-start").value   = data.start || "";
+    document.getElementById("edit-end").value     = data.end   || "";
+    document.getElementById("edit-desc").value    = data.desc  || "";
+    document.getElementById("edit-modal").classList.add("open");
+  }
+
+  function closeEditModal() {
+    document.getElementById("edit-modal").classList.remove("open");
+  }
+
+  async function saveEditLog() {
+    const id    = document.getElementById("edit-log-id").value;
+    const start = document.getElementById("edit-start").value;
+    const end   = document.getElementById("edit-end").value;
+    const desc  = document.getElementById("edit-desc").value.trim();
+
+    if (!id)    { toast("Missing entry ID.", "error"); return; }
+    if (!start || !end) { toast("Start and end time required.", "error"); return; }
+    if (start >= end)   { toast("End time must be after start time.", "error"); return; }
+
+    const btn = document.getElementById("edit-save-btn");
+    btn.disabled = true; btn.textContent = "Saving…";
+
+    try {
+      const res = await apiFetch({ action: "editLog", id, startTime: start, endTime: end, description: desc });
+      if (res.success) {
+        toast("Entry updated ✓", "success");
+        closeEditModal();
+        loadHistory();
+      } else {
+        toast("Error: " + (res.error || "Unknown"), "error");
+      }
+    } catch(err) {
+      toast("Could not reach server.", "error");
+    } finally {
+      btn.disabled = false; btn.textContent = "Save changes";
+    }
+  }
+
+  // Convert "12:29 PM" → "12:29" (HH:MM for time input)
+  function amPmToHHMM(val) {
+    const s = String(val || "").trim();
+    const m = s.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (!m) return "";
+    let h = parseInt(m[1], 10);
+    const min = m[2];
+    const ap  = m[3].toUpperCase();
+    if (ap === "AM" && h === 12) h = 0;
+    if (ap === "PM" && h !== 12) h += 12;
+    return String(h).padStart(2, "0") + ":" + min;
+  }
+
+  // ── Weekly summary modal ──────────────────────────────────────────────────
+  let summaryOption = "current"; // "current" | "custom"
+
+  function openSummaryModal() {
+    showSummarySelector();
+    // Pre-fill current week dates
+    const { start, end } = getWeekRange(weekStartDay);
+    document.getElementById("summary-from").value = start;
+    document.getElementById("summary-to").value   = end;
+    document.getElementById("summary-modal").classList.add("open");
+  }
+
+  function closeSummaryModal() {
+    document.getElementById("summary-modal").classList.remove("open");
+  }
+
+  function showSummarySelector() {
+    document.getElementById("summary-date-selector").style.display = "";
+    document.getElementById("summary-content").style.display = "none";
+  }
+
+  function setSummaryOption(opt) {
+    summaryOption = opt;
+    document.getElementById("summary-opt-current").classList.toggle("active", opt === "current");
+    document.getElementById("summary-opt-custom").classList.toggle("active", opt === "custom");
+    document.getElementById("summary-custom-range").style.display = opt === "custom" ? "" : "none";
+  }
+
+  function generateSummary() {
+    let fromISO, toISO;
+    if (summaryOption === "current") {
+      const range = getWeekRange(weekStartDay);
+      fromISO = range.start;
+      toISO   = range.end;
+    } else {
+      fromISO = document.getElementById("summary-from").value;
+      toISO   = document.getElementById("summary-to").value;
+      if (!fromISO || !toISO) { toast("Select a date range.", "error"); return; }
+      if (fromISO > toISO)    { toast("From date must be before To date.", "error"); return; }
+    }
+
+    // Filter logs for this user in the date range
+    const filtered = allLogs.filter(log => {
+      const d = normalizeDate(log["Date"]);
+      return d >= fromISO && d <= toISO;
+    });
+
+    // Aggregate by project
+    const projectMap = {};
+    filtered.forEach(log => {
+      const proj = log["Project"] || log["Category"] || "Unknown";
+      const hrs  = parseDuration(log["Duration (hrs)"]);
+      if (!projectMap[proj]) projectMap[proj] = 0;
+      projectMap[proj] += hrs;
+    });
+
+    const totalHrs = Object.values(projectMap).reduce((a, b) => a + b, 0);
+    const totalPay = calcPay(totalHrs);
+
+    // Build table rows
+    const rowsHTML = Object.entries(projectMap)
+      .sort((a, b) => b[1] - a[1])
+      .map(([proj, hrs]) => {
+        const pay = calcPay(hrs);
+        return `<tr>
+          <td>${esc(proj)}</td>
+          <td>${hrs.toFixed(2)}h</td>
+          <td>${pay !== null ? fmtPay(pay) : "—"}</td>
+        </tr>`;
+      }).join("");
+
+    // Rate description
+    const rateDesc = rateAmount > 0
+      ? (rateType === "daily"
+          ? `$${rateAmount.toFixed(2)}/day (8h day)`
+          : `$${rateAmount.toFixed(2)}/hr`)
+      : "No rate set";
+
+    // Populate modal
+    document.getElementById("summary-title").textContent =
+      (workerName || "Summary") + " · " + formatDateShort(fromISO) + " – " + formatDateShort(toISO);
+    document.getElementById("summary-meta").innerHTML =
+      `<strong style="color:var(--text)">${esc(workerName || "—")}</strong><br>` +
+      `${formatDateLong(fromISO)} – ${formatDateLong(toISO)}<br>Rate: ${rateDesc}`;
+    document.getElementById("summary-rows").innerHTML = rowsHTML || `<tr><td colspan="3" style="color:var(--text3); padding-top:12px;">No entries in this range.</td></tr>`;
+    document.getElementById("summary-total-hrs").textContent = totalHrs.toFixed(2) + "h";
+    document.getElementById("summary-total-pay").textContent = totalPay !== null ? fmtPay(totalPay) : "—";
+
+    document.getElementById("summary-date-selector").style.display = "none";
+    document.getElementById("summary-content").style.display = "";
+  }
+
+  // ── Modal close on backdrop click ─────────────────────────────────────────
   document.getElementById("worker-modal").addEventListener("click", function(e) {
     if (e.target === this) closeWorkerModal();
+  });
+  document.getElementById("edit-modal").addEventListener("click", function(e) {
+    if (e.target === this) closeEditModal();
+  });
+  document.getElementById("summary-modal").addEventListener("click", function(e) {
+    if (e.target === this) closeSummaryModal();
   });
 
   document.getElementById("worker-input").addEventListener("keydown", e => {

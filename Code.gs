@@ -23,6 +23,7 @@ function handleRequest(e) {
     if      (action === "getProjects") output = getProjects();
     else if (action === "logTime")     output = logTime(params);
     else if (action === "getLogs")     output = getLogs(params);
+    else if (action === "editLog")     output = editLog(params);
     else                               output = { error: "Unknown action: " + action };
   } catch(err) {
     output = { error: err.toString() };
@@ -152,6 +153,52 @@ function getLogs(params) {
   }
 
   return { logs: logs.reverse(), isAdmin: isAdmin };
+}
+
+// ── Edit a log entry ─────────────────────────────────────────────────────────
+function editLog(params) {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_NAME_LOGS);
+  if (!sheet) return { error: "No TimeLogs sheet found" };
+
+  var data    = sheet.getDataRange().getValues();
+  var headers = data[0].map(String);
+
+  var idCol    = headers.indexOf("ID");
+  var startCol = headers.indexOf("Start Time") + 1;
+  var endCol   = headers.indexOf("End Time")   + 1;
+  var descCol  = headers.indexOf("Description")+ 1;
+  var durCol   = headers.indexOf("Duration (hrs)") + 1;
+
+  if (idCol === -1) return { error: "ID column not found" };
+
+  var rowIndex = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idCol]) === String(params.id)) { rowIndex = i + 1; break; }
+  }
+  if (rowIndex === -1) return { error: "Log not found" };
+
+  // Convert "HH:MM" (from time input) → "h:mm AM/PM"
+  function toAmPm(hhmm) {
+    var p = hhmm.split(":"), h = parseInt(p[0]), m = parseInt(p[1]);
+    var ap = h >= 12 ? "PM" : "AM", h12 = h % 12 || 12;
+    return h12 + ":" + (m < 10 ? "0" + m : String(m)) + " " + ap;
+  }
+
+  if (params.startTime) sheet.getRange(rowIndex, startCol).setNumberFormat("@").setValue(toAmPm(params.startTime));
+  if (params.endTime)   sheet.getRange(rowIndex, endCol).setNumberFormat("@").setValue(toAmPm(params.endTime));
+  if (params.description !== undefined) sheet.getRange(rowIndex, descCol).setValue(params.description);
+
+  // Recalculate duration when both times provided
+  if (params.startTime && params.endTime) {
+    var sp = params.startTime.split(":").map(Number);
+    var ep = params.endTime.split(":").map(Number);
+    var diffHrs = ((ep[0] * 60 + ep[1]) - (sp[0] * 60 + sp[1])) / 60;
+    if (diffHrs < 0) diffHrs += 24;
+    sheet.getRange(rowIndex, durCol).setNumberFormat("0.00").setValue(parseFloat(diffHrs.toFixed(2)));
+  }
+
+  return { success: true };
 }
 
 // ── First-time setup ──────────────────────────────────────────────────────────
