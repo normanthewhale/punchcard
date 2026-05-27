@@ -1,0 +1,4 @@
+# Push only the Apps Script backend — ignore all PWA frontend files
+**
+!Code.gs
+!appsscript.json

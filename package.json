@@ -1,0 +1,14 @@
+{
+  "name": "punchcard",
+  "version": "1.0.0",
+  "description": "Punchcard time tracking PWA + Apps Script backend",
+  "scripts": {
+    "push":   "clasp push",
+    "deploy": "clasp push && clasp deploy --deploymentId YOUR_DEPLOYMENT_ID_HERE -d \"deploy\"",
+    "logs":   "clasp logs --watch",
+    "open":   "clasp open"
+  },
+  "devDependencies": {
+    "@google/clasp": "^2.4.2"
+  }
+}

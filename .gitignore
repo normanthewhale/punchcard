@@ -1,0 +1,5 @@
+# clasp OAuth credentials — never commit
+.clasprc.json
+
+# Node
+node_modules/
