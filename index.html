@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Punchcard" />
+  <meta name="theme-color" content="#1a1a1a" />
+  <link rel="manifest" href="manifest.json" />
+  <title>Punchcard</title>
+
+  <style>
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --orange:   #E8773A;
+      --orange-d: #C45F24;
+      --orange-l: #FFF0E8;
+      --bg:       #111111;
+      --bg2:      #1C1C1C;
+      --bg3:      #252525;
+      --border:   #333333;
+      --text:     #F0EDE8;
+      --text2:    #9A9690;
+      --text3:    #5C5A56;
+      --green:    #4CAF74;
+      --red:      #E05454;
+      --radius:   14px;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bot: env(safe-area-inset-bottom, 0px);
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+      overscroll-behavior: none;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      min-height: 100dvh;
+      padding-top: var(--safe-top);
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+      position: sticky;
+      top: var(--safe-top);
+      z-index: 10;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: var(--text);
+    }
+
+    .logo-icon {
+      width: 34px;
+      height: 34px;
+      background: var(--orange);
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-icon svg { width: 20px; height: 20px; fill: #fff; }
+
+    .worker-badge {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 6px 12px;
+      font-size: 13px;
+      color: var(--text2);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .worker-badge span {
+      color: var(--text);
+      font-weight: 500;
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* ── Nav tabs ── */
+    nav {
+      display: flex;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+    }
+
+    nav button {
+      flex: 1;
+      padding: 12px 8px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text2);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: color .2s, border-color .2s;
+    }
+
+    nav button.active {
+      color: var(--orange);
+      border-bottom-color: var(--orange);
+    }
+
+    /* ── Screens ── */
+    .screen { display: none; flex: 1; overflow-y: auto; padding: 20px 20px calc(20px + var(--safe-bot)); }
+    .screen.active { display: block; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .card-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text3);
+      margin-bottom: 14px;
+    }
+
+    /* ── Timer display ── */
+    .timer-wrap {
+      text-align: center;
+      padding: 12px 0 20px;
+    }
+
+    .timer-clock {
+      font-size: 56px;
+      font-weight: 300;
+      letter-spacing: -2px;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+
+    .timer-clock.running { color: var(--orange); }
+    .timer-clock.stopped { color: var(--text2); }
+
+    .timer-status {
+      font-size: 13px;
+      color: var(--text2);
+      margin-top: 6px;
+    }
+
+    .timer-started-at {
+      font-size: 12px;
+      color: var(--text3);
+      margin-top: 4px;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 17px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform .1s, opacity .2s;
+      letter-spacing: -0.2px;
+    }
+
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+    .btn-start  { background: var(--green);  color: #fff; }
+    .btn-stop   { background: var(--red);    color: #fff; }
+    .btn-submit { background: var(--orange); color: #fff; }
+    .btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
+
+    /* ── Form fields ── */
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text2);
+      margin-bottom: 6px;
+    }
+
+    select, textarea, input[type="text"], input[type="time"] {
+      width: 100%;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 16px;
+      padding: 12px 14px;
+      margin-bottom: 16px;
+      outline: none;
+      appearance: none;
+      -webkit-appearance: none;
+      font-family: inherit;
+      transition: border-color .2s;
+    }
+
+    select:focus, textarea:focus, input:focus { border-color: var(--orange); }
+    select option { background: #1C1C1C; }
+
+    textarea {
+      resize: none;
+      min-height: 100px;
+      line-height: 1.5;
+    }
+
+    .field-row { display: flex; gap: 12px; }
+    .field-row > div { flex: 1; }
+
+    /* ── Duration chip ── */
+    .duration-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 6px 12px;
+      font-size: 13px;
+      color: var(--text2);
+      margin-bottom: 16px;
+    }
+
+    .duration-chip strong { color: var(--text); }
+
+    /* ── Log list ── */
+    .log-item {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .log-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 8px;
+    }
+
+    .log-project  { font-size: 15px; font-weight: 600; color: var(--text); }
+    .log-duration { font-size: 14px; font-weight: 600; color: var(--orange); white-space: nowrap; margin-left: 8px; }
+    .log-time     { font-size: 13px; color: var(--text2); margin-bottom: 6px; }
+    .log-desc     { font-size: 14px; color: var(--text2); line-height: 1.5; }
+    .log-worker   { font-size: 12px; color: var(--text3); margin-top: 6px; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: calc(24px + var(--safe-bot));
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: #2C2C2C;
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 12px 20px;
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+      z-index: 100;
+      transition: transform .35s cubic-bezier(0.34, 1.56, 0.64, 1);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+
+    #toast.show    { transform: translateX(-50%) translateY(0); }
+    #toast.success { color: var(--green); }
+    #toast.error   { color: var(--red);   }
+
+    /* ── Modal ── */
+    .modal-bg {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 50;
+      align-items: flex-end;
+    }
+
+    .modal-bg.open { display: flex; }
+
+    .modal {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius) var(--radius) 0 0;
+      padding: 24px 20px calc(24px + var(--safe-bot));
+      width: 100%;
+      animation: slideUp .3s ease;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to   { transform: translateY(0); }
+    }
+
+    .modal h2 { font-size: 18px; font-weight: 600; margin-bottom: 20px; }
+
+    /* ── Empty state ── */
+    .empty {
+      text-align: center;
+      padding: 48px 20px;
+      color: var(--text3);
+    }
+
+    .empty svg { width: 48px; height: 48px; margin-bottom: 16px; opacity: 0.3; }
+
+    /* ── Spinner ── */
+    .spinner {
+      width: 20px; height: 20px;
+      border: 2px solid var(--border);
+      border-top-color: var(--orange);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Stats grid ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .stat-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      text-align: center;
+    }
+
+    .stat-value { font-size: 26px; font-weight: 700; color: var(--orange); letter-spacing: -1px; }
+    .stat-label { font-size: 12px; color: var(--text3); margin-top: 4px; }
+
+    /* ── Install banner ── */
+    #install-banner {
+      display: none;
+      background: var(--bg3);
+      border: 1px solid var(--orange);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin: 0 0 16px;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--text2);
+    }
+
+    #install-banner strong { color: var(--text); display: block; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm.5 11H11V7h1.5v6zm0 4H11v-2h1.5v2z"/>
+          <rect x="11" y="7" width="1.5" height="6" rx="0.75"/>
+          <polygon points="11.5,13 15,13 11.5,18"/>
+        </svg>
+      </div>
+      Punchcard
+    </div>
+    <button class="worker-badge" onclick="openWorkerModal()" aria-label="Change worker name">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+      </svg>
+      <span id="worker-display">Set name</span>
+    </button>
+  </header>
+
+  <!-- NAV -->
+  <nav role="tablist">
+    <button role="tab" class="active" onclick="switchTab('clock')"   id="tab-clock">⏱ Clock</button>
+    <button role="tab"               onclick="switchTab('history')" id="tab-history">📋 History</button>
+  </nav>
+
+  <!-- CLOCK SCREEN -->
+  <section class="screen active" id="screen-clock" aria-label="Time clock">
+
+    <div id="install-banner">
+      <strong>📲 Add to Home Screen</strong>
+      On iPhone: tap the Share button → "Add to Home Screen". On Android: tap the menu → "Add to Home Screen".
+    </div>
+
+    <div class="card">
+      <div class="card-title">Timer</div>
+      <div class="timer-wrap">
+        <div class="timer-clock" id="timer-display">00:00:00</div>
+        <div class="timer-status" id="timer-status">Ready to clock in</div>
+        <div class="timer-started-at" id="timer-started-at"></div>
+      </div>
+      <button class="btn btn-start" id="btn-start" onclick="startTimer()">Clock In</button>
+      <button class="btn btn-stop"  id="btn-stop"  onclick="stopTimer()" style="display:none; margin-top:10px;">Clock Out</button>
+    </div>
+
+    <div class="card" id="submit-card" style="display:none;">
+      <div class="card-title">Log Entry</div>
+
+      <div class="duration-chip">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+        </svg>
+        Duration: <strong id="calc-duration">—</strong>
+      </div>
+
+      <div class="field-row">
+        <div>
+          <label for="f-start">Start time</label>
+          <input type="time" id="f-start" oninput="recalcDuration()" />
+        </div>
+        <div>
+          <label for="f-end">End time</label>
+          <input type="time" id="f-end" oninput="recalcDuration()" />
+        </div>
+      </div>
+
+      <label for="f-project">House / Project</label>
+      <select id="f-project">
+        <option value="">Loading projects…</option>
+      </select>
+
+      <label for="f-desc">What was done?</label>
+      <textarea id="f-desc" placeholder="e.g. Framed the garage walls, installed roof trusses on unit 3…" rows="4"></textarea>
+
+      <button class="btn btn-submit" id="btn-submit" onclick="submitLog()">Save &amp; Submit</button>
+      <button class="btn btn-secondary" style="margin-top:10px;" onclick="cancelSubmit()">Discard</button>
+    </div>
+
+  </section>
+
+  <!-- HISTORY SCREEN -->
+  <section class="screen" id="screen-history" aria-label="Time log history">
+
+    <div class="stats-grid" id="stats-grid" style="display:none;">
+      <div class="stat-card">
+        <div class="stat-value" id="stat-today">0h</div>
+        <div class="stat-label">Today</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-week">0h</div>
+        <div class="stat-label">This week</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="margin-bottom:0;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span>Recent logs</span>
+          <button onclick="loadHistory()" style="background:none; border:none; color:var(--orange); font-size:13px; cursor:pointer; font-weight:600;">Refresh ↻</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="history-list">
+      <div class="empty">
+        <div class="spinner"></div>
+        <p style="margin-top:12px;">Loading…</p>
+      </div>
+    </div>
+
+  </section>
+
+</div><!-- /app -->
+
+<!-- Worker name modal -->
+<div class="modal-bg" id="worker-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal">
+    <h2 id="modal-title">Your name</h2>
+    <label for="worker-input">Enter your name</label>
+    <input type="text" id="worker-input" placeholder="e.g. Mike, Sarah…" autocomplete="name" style="font-size:18px;" />
+    <button class="btn btn-submit" onclick="saveWorkerName()">Save</button>
+    <button class="btn btn-secondary" style="margin-top:10px;" onclick="closeWorkerModal()">Cancel</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" role="alert" aria-live="assertive"></div>
+
+<script>
+  // ── CONFIG ────────────────────────────────────────────────────────────────
+  const API_URL = "https://script.google.com/macros/s/AKfycbx4M-4nvk1HlJFcGpHcWvreGcBvIhHlmXC_sC-wP0dQs7xn4sK1DNQWzSYdACBGsQ42/exec";
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  let timerInterval  = null;
+  let startTimestamp = null;
+  let endTimestamp   = null;
+  let workerName     = localStorage.getItem("ft_worker") || "";
+  let projects       = [];
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  document.addEventListener("DOMContentLoaded", () => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./sw.js").catch(() => {});
+    }
+
+    // Clear any stale timer state — prevents crash-on-load from old sessions
+    localStorage.removeItem("ft_timer_start");
+
+    updateWorkerDisplay();
+    if (!workerName) setTimeout(openWorkerModal, 600);
+
+    fetchProjects();
+
+    const isStandalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+    if (!isStandalone) {
+      document.getElementById("install-banner").style.display = "block";
+    }
+  });
+
+  // ── Tabs ──────────────────────────────────────────────────────────────────
+  function switchTab(tab) {
+    document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+    document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+    document.getElementById("screen-" + tab).classList.add("active");
+    document.getElementById("tab-" + tab).classList.add("active");
+    if (tab === "history") loadHistory();
+  }
+
+  // ── Worker name ───────────────────────────────────────────────────────────
+  function openWorkerModal() {
+    document.getElementById("worker-input").value = workerName;
+    document.getElementById("worker-modal").classList.add("open");
+    setTimeout(() => document.getElementById("worker-input").focus(), 300);
+  }
+
+  function closeWorkerModal() {
+    document.getElementById("worker-modal").classList.remove("open");
+  }
+
+  function saveWorkerName() {
+    const val = document.getElementById("worker-input").value.trim();
+    if (!val) { toast("Please enter your name.", "error"); return; }
+    workerName = val;
+    localStorage.setItem("ft_worker", val);
+    updateWorkerDisplay();
+    closeWorkerModal();
+    toast("Welcome, " + val + "! 👋", "success");
+  }
+
+  function updateWorkerDisplay() {
+    document.getElementById("worker-display").textContent = workerName || "Set name";
+  }
+
+  // ── Projects ──────────────────────────────────────────────────────────────
+  async function fetchProjects() {
+    const sel = document.getElementById("f-project");
+    try {
+      const res = await apiFetch({ action: "getProjects" });
+      projects  = res.projects || [];
+      sel.innerHTML = projects.length
+        ? '<option value="">Select a house / project…</option>' + projects.map(p => `<option value="${p}">${p}</option>`).join("")
+        : '<option value="">No projects found — add them in the Sheet</option>';
+    } catch (err) {
+      sel.innerHTML = '<option value="">⚠️ Could not load projects</option>';
+      console.error("fetchProjects failed:", err);
+      toast("Could not load projects. Check API connection.", "error");
+    }
+  }
+
+  // ── Timer ─────────────────────────────────────────────────────────────────
+  function startTimer() {
+    try {
+      if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+
+      startTimestamp = Date.now();
+
+      document.getElementById("btn-start").style.display  = "none";
+      document.getElementById("btn-stop").style.display   = "block";
+      document.getElementById("submit-card").style.display = "none";
+      document.getElementById("timer-clock").className    = "timer-clock running";
+      document.getElementById("timer-status").textContent = "Clocked in";
+      document.getElementById("timer-started-at").textContent = "Started at " + fmtTime12(new Date(startTimestamp));
+
+      tickTimer();
+      timerInterval = setInterval(tickTimer, 1000);
+
+      if (!workerName) setTimeout(openWorkerModal, 800);
+    } catch (err) {
+      console.error("startTimer error:", err);
+    }
+  }
+
+  function tickTimer() {
+    try {
+      document.getElementById("timer-display").textContent = fmtElapsed(Date.now() - startTimestamp);
+    } catch (err) {
+      clearInterval(timerInterval);
+      console.error("tickTimer error:", err);
+    }
+  }
+
+  function stopTimer() {
+    clearInterval(timerInterval);
+    timerInterval = null;
+    endTimestamp  = Date.now();
+
+    document.getElementById("btn-start").style.display   = "block";
+    document.getElementById("btn-stop").style.display    = "none";
+    document.getElementById("timer-clock").className     = "timer-clock stopped";
+    document.getElementById("timer-status").textContent  = "Clocked out";
+    document.getElementById("timer-started-at").textContent = "";
+    document.getElementById("timer-display").textContent = fmtElapsed(endTimestamp - startTimestamp);
+
+    const startDate = new Date(startTimestamp);
+    const endDate   = new Date(endTimestamp);
+    document.getElementById("f-start").value = toTimeInput(startDate);
+    document.getElementById("f-end").value   = toTimeInput(endDate);
+    recalcDuration();
+
+    document.getElementById("submit-card").style.display = "block";
+    document.getElementById("submit-card").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function cancelSubmit() {
+    document.getElementById("submit-card").style.display  = "none";
+    document.getElementById("timer-display").textContent  = "00:00:00";
+    document.getElementById("timer-clock").className      = "timer-clock";
+    document.getElementById("timer-status").textContent   = "Ready to clock in";
+    startTimestamp = null;
+    endTimestamp   = null;
+  }
+
+  function recalcDuration() {
+    const s = document.getElementById("f-start").value;
+    const e = document.getElementById("f-end").value;
+    if (!s || !e) { document.getElementById("calc-duration").textContent = "—"; return; }
+    const today = new Date().toISOString().split("T")[0];
+    const diff  = (new Date(today + "T" + e) - new Date(today + "T" + s)) / 3600000;
+    document.getElementById("calc-duration").textContent = diff > 0 ? diff.toFixed(2) + " hrs" : "—";
+  }
+
+  // ── Submit ────────────────────────────────────────────────────────────────
+  async function submitLog() {
+    const project = document.getElementById("f-project").value;
+    const desc    = document.getElementById("f-desc").value.trim();
+    const startT  = document.getElementById("f-start").value;
+    const endT    = document.getElementById("f-end").value;
+
+    if (!workerName)       { openWorkerModal(); return; }
+    if (!project)          { toast("Please select a house / project.", "error"); return; }
+    if (!desc)             { toast("Please describe the work done.", "error"); return; }
+    if (!startT || !endT)  { toast("Start and end time required.", "error"); return; }
+
+    const today    = new Date().toISOString().split("T")[0];
+    const startISO = new Date(today + "T" + startT).toISOString();
+    const endISO   = new Date(today + "T" + endT).toISOString();
+
+    if (new Date(endISO) <= new Date(startISO)) {
+      toast("End time must be after start time.", "error"); return;
+    }
+
+    const btn = document.getElementById("btn-submit");
+    btn.disabled    = true;
+    btn.textContent = "Saving…";
+
+    try {
+      const res = await apiFetch({
+        action:      "logTime",
+        workerName:  workerName,
+        project:     project,
+        startTime:   startISO,
+        endTime:     endISO,
+        description: desc
+      });
+
+      if (res.success) {
+        toast("✅ Entry saved — " + res.duration + " hrs", "success");
+        document.getElementById("f-desc").value    = "";
+        document.getElementById("f-project").value = "";
+        document.getElementById("submit-card").style.display  = "none";
+        document.getElementById("timer-display").textContent  = "00:00:00";
+        document.getElementById("timer-clock").className      = "timer-clock";
+        document.getElementById("timer-status").textContent   = "Ready to clock in";
+        startTimestamp = null;
+        endTimestamp   = null;
+      } else {
+        toast("Error: " + (res.error || "Unknown"), "error");
+      }
+    } catch (err) {
+      toast("Could not reach server. Check connection.", "error");
+      console.error("submitLog error:", err);
+    } finally {
+      btn.disabled    = false;
+      btn.textContent = "Save & Submit";
+    }
+  }
+
+  // ── History ───────────────────────────────────────────────────────────────
+  async function loadHistory() {
+    const list = document.getElementById("history-list");
+    list.innerHTML = `<div class="empty"><div class="spinner"></div><p style="margin-top:12px;">Loading…</p></div>`;
+    document.getElementById("stats-grid").style.display = "none";
+
+    try {
+      const res  = await apiFetch({ action: "getLogs", workerName: workerName });
+      const logs = res.logs || [];
+      renderHistory(logs);
+      renderStats(logs);
+    } catch (err) {
+      list.innerHTML = `<div class="empty"><p style="color:var(--red);">Could not load history.<br>Check your connection.</p></div>`;
+      console.error("loadHistory error:", err);
+    }
+  }
+
+  function renderHistory(logs) {
+    const list = document.getElementById("history-list");
+    if (!logs.length) {
+      list.innerHTML = `<div class="empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M9 12h6M9 16h6M7 3H5a2 2 0 00-2 2v16a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2h-2"/>
+          <rect x="7" y="1" width="10" height="4" rx="1.5"/>
+        </svg>
+        <p>No logs yet.<br>Clock in to get started.</p>
+      </div>`;
+      return;
+    }
+
+    list.innerHTML = logs.slice(0, 30).map(log => {
+      const dur = parseFloat(log["Duration (hrs)"]) || 0;
+      const w   = log["Worker Name"] ? `<div class="log-worker">${esc(log["Worker Name"])}</div>` : "";
+      return `<div class="log-item">
+        <div class="log-top">
+          <div class="log-project">${esc(log["Project"])}</div>
+          <div class="log-duration">${dur.toFixed(2)}h</div>
+        </div>
+        <div class="log-time">${esc(log["Date"])} · ${esc(log["Start Time"])} – ${esc(log["End Time"])}</div>
+        <div class="log-desc">${esc(log["Description"])}</div>
+        ${w}
+      </div>`;
+    }).join("");
+  }
+
+  function renderStats(logs) {
+    const today  = new Date().toISOString().split("T")[0];
+    const monday = getMondayISO();
+    let todayHrs = 0, weekHrs = 0;
+
+    logs.forEach(log => {
+      const d   = log["Date"];
+      const hrs = parseFloat(log["Duration (hrs)"]) || 0;
+      if (d === today)  todayHrs += hrs;
+      if (d >= monday)  weekHrs  += hrs;
+    });
+
+    document.getElementById("stat-today").textContent = todayHrs.toFixed(1) + "h";
+    document.getElementById("stat-week").textContent  = weekHrs.toFixed(1) + "h";
+    document.getElementById("stats-grid").style.display = "grid";
+  }
+
+  function getMondayISO() {
+    const d   = new Date();
+    const day = d.getDay();
+    d.setDate(d.getDate() - day + (day === 0 ? -6 : 1));
+    return d.toISOString().split("T")[0];
+  }
+
+  // ── API ───────────────────────────────────────────────────────────────────
+  async function apiFetch(params) {
+    const url = new URL(API_URL);
+    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+    const res = await fetch(url.toString(), { redirect: "follow" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return res.json();
+  }
+
+  // ── Utilities ─────────────────────────────────────────────────────────────
+  function fmtElapsed(ms) {
+    const s  = Math.floor(ms / 1000);
+    const h  = Math.floor(s / 3600);
+    const m  = Math.floor((s % 3600) / 60);
+    const sc = s % 60;
+    return [h, m, sc].map(n => String(n).padStart(2, "0")).join(":");
+  }
+
+  function fmtTime12(date) {
+    return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  }
+
+  function toTimeInput(date) {
+    return date.getHours().toString().padStart(2, "0") + ":" + date.getMinutes().toString().padStart(2, "0");
+  }
+
+  function esc(str) {
+    return String(str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+
+  function toast(msg, type = "success") {
+    const el = document.getElementById("toast");
+    el.textContent = msg;
+    el.className   = "show " + type;
+    setTimeout(() => { el.className = type; }, 3000);
+  }
+
+  // Close modal on backdrop click
+  document.getElementById("worker-modal").addEventListener("click", function(e) {
+    if (e.target === this) closeWorkerModal();
+  });
+
+  // Enter key submits worker name
+  document.getElementById("worker-input").addEventListener("keydown", e => {
+    if (e.key === "Enter") saveWorkerName();
+  });
+</script>
+
+</body>
+</html>
