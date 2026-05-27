@@ -1360,11 +1360,11 @@
       const wr = workerRates[selectedWorker];
       rateDesc = (wr && wr.rateAmount > 0)
         ? (wr.rateType === "daily" ? `$${wr.rateAmount.toFixed(2)}/day (8h day)` : `$${wr.rateAmount.toFixed(2)}/hr`)
-        : "Not available";
+        : "—";
     } else {
       rateDesc = rateAmount > 0
         ? (rateType === "daily" ? `$${rateAmount.toFixed(2)}/day (8h day)` : `$${rateAmount.toFixed(2)}/hr`)
-        : "Not available";
+        : "—";
     }
     const metaHTML =
       `<strong style="color:var(--text)">${esc(summaryFor)}</strong><br>` +
@@ -1376,7 +1376,7 @@
     document.getElementById("summary-meta").innerHTML  = metaHTML;
     document.getElementById("summary-rows").innerHTML  = rowsHTML;
     document.getElementById("summary-total-hrs").textContent = totalHrs.toFixed(2) + "h";
-    document.getElementById("summary-total-pay").textContent = totalPay !== null ? fmtPay(totalPay) : "Not available";
+    document.getElementById("summary-total-pay").textContent = totalPay !== null ? fmtPay(totalPay) : "—";
     document.getElementById("summary-date-selector").style.display = "none";
     document.getElementById("summary-content").style.display = "";
 
@@ -1406,11 +1406,11 @@
       : `<tr><th>Project</th><th>Hours</th><th>Amount</th></tr>`;
 
     const tbodyRows = rowData.map(r => groupByWorker
-      ? `<tr><td>${esc(r.label)}</td><td>${r.rateLabel}</td><td>${r.hrs.toFixed(2)}h</td><td>${r.pay !== null ? fmtPay(r.pay) : "Not available"}</td></tr>`
-      : `<tr><td>${esc(r.label)}</td><td>${r.hrs.toFixed(2)}h</td><td>${r.pay !== null ? fmtPay(r.pay) : "Not available"}</td></tr>`
+      ? `<tr><td>${esc(r.label)}</td><td>${r.rateLabel}</td><td>${r.hrs.toFixed(2)}h</td><td>${r.pay !== null ? fmtPay(r.pay) : "—"}</td></tr>`
+      : `<tr><td>${esc(r.label)}</td><td>${r.hrs.toFixed(2)}h</td><td>${r.pay !== null ? fmtPay(r.pay) : "—"}</td></tr>`
     ).join("");
 
-    const totalPayStr = totalPay !== null ? fmtPay(totalPay) : "Not available";
+    const totalPayStr = totalPay !== null ? fmtPay(totalPay) : "—";
 
     const html = `<!DOCTYPE html>
 <html lang="en">
