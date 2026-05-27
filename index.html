@@ -1279,8 +1279,8 @@
       : workerName;
     const groupByWorker = isAdminMode && selectedWorker === "";
 
-    // Fetch per-worker rates from sheet for all-workers view
-    if (groupByWorker) {
+    // Fetch per-worker rates from sheet whenever admin is generating a summary
+    if (isAdminMode) {
       try {
         const res = await apiFetch({ action: "getWorkerRates", adminCode });
         workerRates = res.rates || {};
@@ -1324,7 +1324,16 @@
             hasAnyPay = true; totalPaySum += pay;
           } else { rateLabel = "—"; }
         } else {
-          pay = calcPay(hrs);
+          // Admin viewing a specific worker → use that worker's sheet rate
+          // Otherwise use the current user's own rate
+          if (isAdminMode && selectedWorker && selectedWorker !== workerName) {
+            const wr = workerRates[selectedWorker];
+            if (wr && wr.rateAmount > 0) {
+              pay = wr.rateType === "daily" ? (hrs / 8) * wr.rateAmount : hrs * wr.rateAmount;
+            }
+          } else {
+            pay = calcPay(hrs);
+          }
           if (pay !== null) { hasAnyPay = true; totalPaySum += pay; }
         }
         return { label, hrs, rateLabel, pay };
@@ -1344,11 +1353,19 @@
         ).join("")
       : `<tr><td colspan="${colSpan}" style="color:var(--text3);padding-top:12px;">No entries in this range.</td></tr>`;
 
-    // Meta block — hide rate line for all-workers admin view
+    // Determine rate description for the meta block
     const summaryFor = groupByWorker ? "All workers" : (selectedWorker || workerName || "—");
-    const rateDesc   = rateAmount > 0
-      ? (rateType === "daily" ? `$${rateAmount.toFixed(2)}/day (8h day)` : `$${rateAmount.toFixed(2)}/hr`)
-      : "No rate set";
+    let rateDesc;
+    if (isAdminMode && selectedWorker && selectedWorker !== workerName) {
+      const wr = workerRates[selectedWorker];
+      rateDesc = (wr && wr.rateAmount > 0)
+        ? (wr.rateType === "daily" ? `$${wr.rateAmount.toFixed(2)}/day (8h day)` : `$${wr.rateAmount.toFixed(2)}/hr`)
+        : "Not available";
+    } else {
+      rateDesc = rateAmount > 0
+        ? (rateType === "daily" ? `$${rateAmount.toFixed(2)}/day (8h day)` : `$${rateAmount.toFixed(2)}/hr`)
+        : "Not available";
+    }
     const metaHTML =
       `<strong style="color:var(--text)">${esc(summaryFor)}</strong><br>` +
       `${formatDateLong(fromISO)} – ${formatDateLong(toISO)}` +
@@ -1359,7 +1376,7 @@
     document.getElementById("summary-meta").innerHTML  = metaHTML;
     document.getElementById("summary-rows").innerHTML  = rowsHTML;
     document.getElementById("summary-total-hrs").textContent = totalHrs.toFixed(2) + "h";
-    document.getElementById("summary-total-pay").textContent = totalPay !== null ? fmtPay(totalPay) : "—";
+    document.getElementById("summary-total-pay").textContent = totalPay !== null ? fmtPay(totalPay) : "Not available";
     document.getElementById("summary-date-selector").style.display = "none";
     document.getElementById("summary-content").style.display = "";
 
@@ -1389,11 +1406,11 @@
       : `<tr><th>Project</th><th>Hours</th><th>Amount</th></tr>`;
 
     const tbodyRows = rowData.map(r => groupByWorker
-      ? `<tr><td>${r.label}</td><td>${r.rateLabel}</td><td>${r.hrs.toFixed(2)}h</td><td>${r.pay !== null ? fmtPay(r.pay) : "—"}</td></tr>`
-      : `<tr><td>${r.label}</td><td>${r.hrs.toFixed(2)}h</td><td>${r.pay !== null ? fmtPay(r.pay) : "—"}</td></tr>`
+      ? `<tr><td>${esc(r.label)}</td><td>${r.rateLabel}</td><td>${r.hrs.toFixed(2)}h</td><td>${r.pay !== null ? fmtPay(r.pay) : "Not available"}</td></tr>`
+      : `<tr><td>${esc(r.label)}</td><td>${r.hrs.toFixed(2)}h</td><td>${r.pay !== null ? fmtPay(r.pay) : "Not available"}</td></tr>`
     ).join("");
 
-    const totalPayStr = totalPay !== null ? fmtPay(totalPay) : "—";
+    const totalPayStr = totalPay !== null ? fmtPay(totalPay) : "Not available";
 
     const html = `<!DOCTYPE html>
 <html lang="en">
