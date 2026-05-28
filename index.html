@@ -717,7 +717,8 @@
   // ── Summary / report state ────────────────────────────────────────────────
   let workerRates              = {};
   let lastSummaryData          = null;
-  let selectedReportCategories = []; // [] = all, ['A'] = one, ['A','B'] = multi
+  let selectedReportCategories  = []; // specific cats chosen by user
+  let allCategoriesSelected     = false; // true when "All" checkbox is checked
   let reportAvailableCategories = [];
 
   // ── Pagination state ──────────────────────────────────────────────────────
@@ -1504,9 +1505,10 @@
       workerWrap.style.display = "none";
     }
 
-    // Pre-fill category from active filter
+    // Pre-fill category from active filter (or start with nothing selected)
     const activeCat = document.getElementById("filter-category").value;
     selectedReportCategories = activeCat ? [activeCat] : [];
+    allCategoriesSelected = false;
 
     populateSummaryDropdowns();
 
@@ -1543,28 +1545,29 @@
   // ── Report category checkbox list ────────────────────────────────────────
   function renderReportCategoryList(categories) {
     reportAvailableCategories = categories;
-    const list     = document.getElementById("summary-category-list");
-    const allSel   = selectedReportCategories.length === 0; // [] = "all"
-    const indeterminate = !allSel && selectedReportCategories.length < categories.length;
+    const list = document.getElementById("summary-category-list");
+    const someSel = !allCategoriesSelected && selectedReportCategories.length > 0;
+    const indeterminate = someSel && selectedReportCategories.length < categories.length;
 
     list.innerHTML =
       `<label class="cat-check-item all-item">
-        <input type="checkbox" id="cat-check-all" ${allSel ? "checked" : ""} />
+        <input type="checkbox" id="cat-check-all" ${allCategoriesSelected ? "checked" : ""} />
         <span>All categories</span>
       </label>` +
       categories.map(c =>
         `<label class="cat-check-item">
-          <input type="checkbox" data-cat="${esc(c)}" ${allSel || selectedReportCategories.includes(c) ? "checked" : ""} />
+          <input type="checkbox" data-cat="${esc(c)}" ${allCategoriesSelected || selectedReportCategories.includes(c) ? "checked" : ""} />
           <span>${esc(c)}</span>
         </label>`
       ).join("");
 
-    // Mark "All" as indeterminate when only some are selected
+    // Show indeterminate state on "All" when only some are checked
     const allCb = list.querySelector("#cat-check-all");
     allCb.indeterminate = indeterminate;
 
     allCb.addEventListener("change", () => {
-      selectedReportCategories = [];          // check All = reset to all
+      allCategoriesSelected     = allCb.checked;
+      selectedReportCategories  = [];
       renderReportCategoryList(reportAvailableCategories);
       populateSummaryDropdowns();
     });
@@ -1573,17 +1576,21 @@
       cb.addEventListener("change", () => {
         const cat = cb.dataset.cat;
         if (cb.checked) {
+          // Checking an individual box turns off "All"
+          allCategoriesSelected = false;
           if (!selectedReportCategories.includes(cat)) selectedReportCategories.push(cat);
+          // If every individual box is now checked → treat as "All"
+          if (selectedReportCategories.length === reportAvailableCategories.length) {
+            allCategoriesSelected    = true;
+            selectedReportCategories = [];
+          }
         } else {
-          // [] means "all selected" — expand to full list before removing one
-          if (selectedReportCategories.length === 0) {
+          // Unchecking: if "All" was active, expand to full list first
+          if (allCategoriesSelected) {
+            allCategoriesSelected    = false;
             selectedReportCategories = [...reportAvailableCategories];
           }
           selectedReportCategories = selectedReportCategories.filter(c => c !== cat);
-        }
-        // If every category is individually checked, collapse back to "all"
-        if (selectedReportCategories.length === reportAvailableCategories.length) {
-          selectedReportCategories = [];
         }
         renderReportCategoryList(reportAvailableCategories);
         populateSummaryDropdowns();
@@ -1617,12 +1624,13 @@
     const categories = [...new Set(base.map(l => l["Category"] || "").filter(Boolean))].sort();
     // Remove any selected categories that no longer exist in the data
     selectedReportCategories = selectedReportCategories.filter(c => categories.includes(c));
+    // If "All" was selected but categories shrunk, keep allCategoriesSelected as-is
     renderReportCategoryList(categories);
 
     // Projects filtered by selected categories
     const projects = [...new Set(
       base
-        .filter(l => selectedReportCategories.length === 0 || selectedReportCategories.includes(l["Category"] || ""))
+        .filter(l => allCategoriesSelected || selectedReportCategories.length === 0 || selectedReportCategories.includes(l["Category"] || ""))
         .map(l => l["Project"] || l["Category"] || "")
         .filter(Boolean)
     )].sort();
@@ -1659,6 +1667,12 @@
       // Always group by category for non-worker reports
       const groupByCategory = !groupByWorker;
 
+      // Require at least one category to be selected
+      if (!allCategoriesSelected && selectedReportCategories.length === 0) {
+        toast("Please select at least one category.", "error");
+        return;
+      }
+
       if (isAdminMode) {
         try {
           const res = await apiFetch({ action: "getWorkerRates", adminCode });
@@ -1672,7 +1686,7 @@
         if (d < fromISO || d > toISO) return false;
         if (!isAdminMode && (log["Worker Name"] || "").trim() !== workerName) return false;
         if (!groupByWorker && selectedWorker && (log["Worker Name"] || "").trim() !== selectedWorker) return false;
-        if (selectedReportCategories.length > 0 && !selectedReportCategories.includes(log["Category"] || "")) return false;
+        if (!allCategoriesSelected && selectedReportCategories.length > 0 && !selectedReportCategories.includes(log["Category"] || "")) return false;
         if (selectedProject && (log["Project"] || log["Category"] || "") !== selectedProject) return false;
         return true;
       });
@@ -1693,9 +1707,9 @@
       if (groupByCategory) {
         // Determine which categories to group by:
         // explicit selection → use those; "all" (empty array) → derive from filtered logs
-        const catsToGroup = selectedReportCategories.length > 0
-          ? selectedReportCategories
-          : [...new Set(filtered.map(l => l["Category"] || "").filter(Boolean))].sort();
+        const catsToGroup = allCategoriesSelected
+          ? [...new Set(filtered.map(l => l["Category"] || "").filter(Boolean))].sort()
+          : selectedReportCategories;
 
         const sections = catsToGroup.map(cat => {
           const catLogs = filtered.filter(l => (l["Category"] || "") === cat);
