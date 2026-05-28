@@ -1575,9 +1575,13 @@
         if (cb.checked) {
           if (!selectedReportCategories.includes(cat)) selectedReportCategories.push(cat);
         } else {
+          // [] means "all selected" — expand to full list before removing one
+          if (selectedReportCategories.length === 0) {
+            selectedReportCategories = [...reportAvailableCategories];
+          }
           selectedReportCategories = selectedReportCategories.filter(c => c !== cat);
         }
-        // If every category is individually checked, treat as "all"
+        // If every category is individually checked, collapse back to "all"
         if (selectedReportCategories.length === reportAvailableCategories.length) {
           selectedReportCategories = [];
         }
