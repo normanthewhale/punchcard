@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -29,6 +29,17 @@
       --safe-bot: env(safe-area-inset-bottom, 0px);
     }
 
+    [data-theme="light"] {
+      --bg:     #F5F4F0;
+      --bg2:    #FFFFFF;
+      --bg3:    #EDEDEB;
+      --border: #DDDDD8;
+      --text:   #1A1A1A;
+      --text2:  #5C5A56;
+      --text3:  #999993;
+      --green:  #2E7D4F;
+    }
+
     html, body {
       height: 100%;
       background: var(--bg);
@@ -49,17 +60,22 @@
       background: var(--bg);
       position: sticky; top: var(--safe-top); z-index: 10;
     }
-
     .logo { display: flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
     .logo-icon { width: 34px; height: 34px; background: var(--orange); border-radius: 9px; display: flex; align-items: center; justify-content: center; }
     .logo-icon svg { width: 20px; height: 20px; fill: #fff; }
-
     .worker-badge {
       background: var(--bg3); border: 1px solid var(--border); border-radius: 20px;
       padding: 6px 12px; font-size: 13px; color: var(--text2); cursor: pointer;
       display: flex; align-items: center; gap: 6px;
     }
     .worker-badge span { color: var(--text); font-weight: 500; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .btn-theme {
+      background: none; border: 1px solid var(--border); border-radius: 20px;
+      color: var(--text3); font-size: 14px; padding: 5px 8px; cursor: pointer;
+      display: flex; align-items: center; line-height: 1;
+      transition: border-color .15s, color .15s;
+    }
+    .btn-theme:hover { border-color: var(--orange); color: var(--orange); }
 
     /* ── Nav ── */
     nav { display: flex; background: var(--bg); border-bottom: 1px solid var(--border); }
@@ -83,7 +99,7 @@
     .timer-clock { font-size: 56px; font-weight: 300; letter-spacing: -2px; color: var(--text); font-variant-numeric: tabular-nums; line-height: 1; }
     .timer-clock.running { color: var(--orange); }
     .timer-clock.stopped { color: var(--text2); }
-    .timer-status   { font-size: 13px; color: var(--text2); margin-top: 6px; }
+    .timer-status    { font-size: 13px; color: var(--text2); margin-top: 6px; }
     .timer-started-at { font-size: 12px; color: var(--text3); margin-top: 4px; }
 
     /* ── Buttons ── */
@@ -103,7 +119,7 @@
       outline: none; appearance: none; -webkit-appearance: none; font-family: inherit; transition: border-color .2s;
     }
     select:focus, textarea:focus, input:focus { border-color: var(--orange); }
-    select option { background: #1C1C1C; }
+    select option { background: var(--bg2); }
     textarea { resize: none; min-height: 100px; line-height: 1.5; }
     .field-row { display: flex; gap: 12px; }
     .field-row > div { flex: 1; }
@@ -133,7 +149,15 @@
 
     /* ── Filter bar ── */
     .filter-bar { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
-    .filter-bar .card-title { margin-bottom: 12px; }
+    .filter-bar-header { display: flex; justify-content: space-between; align-items: center; }
+    .filter-bar-header .card-title { margin-bottom: 0; }
+    .filter-toggle-btn {
+      background: none; border: none; color: var(--text3); cursor: pointer;
+      font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;
+      padding: 0; display: flex; align-items: center; gap: 4px; transition: color .15s;
+    }
+    .filter-toggle-btn:hover { color: var(--text2); }
+    #filter-content { margin-top: 12px; }
     .filter-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
     .filter-row > div { flex: 1; min-width: 130px; }
     .filter-row label { margin-bottom: 4px; }
@@ -147,14 +171,30 @@
     .stat-label { font-size: 12px; color: var(--text3); margin-top: 4px; }
     .stat-sublabel { font-size: 11px; color: var(--text3); margin-top: 2px; opacity: 0.7; }
 
+    /* ── Log toolbar ── */
+    .log-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; min-height: 24px; }
+    .results-count { font-size: 12px; color: var(--text3); }
+    .btn-refresh { background: none; border: none; color: var(--orange); font-size: 13px; cursor: pointer; font-weight: 600; padding: 0; }
+
+    /* ── Pagination ── */
+    .pagination { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 12px 0 4px; }
+    .btn-page {
+      background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
+      color: var(--text2); font-size: 14px; font-weight: 600; padding: 8px 16px;
+      cursor: pointer; transition: border-color .15s, color .15s;
+    }
+    .btn-page:hover:not(:disabled) { border-color: var(--orange); color: var(--orange); }
+    .btn-page:disabled { opacity: 0.3; cursor: not-allowed; }
+    .page-info { font-size: 13px; color: var(--text3); white-space: nowrap; }
+
     /* ── Toast ── */
     #toast {
       position: fixed; bottom: calc(24px + var(--safe-bot)); left: 50%;
       transform: translateX(-50%) translateY(80px);
-      background: #2C2C2C; border: 1px solid var(--border); border-radius: 24px;
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 24px;
       padding: 12px 20px; font-size: 14px; font-weight: 500; white-space: nowrap;
       z-index: 100; transition: transform .35s cubic-bezier(0.34, 1.56, 0.64, 1);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
     }
     #toast.show    { transform: translateX(-50%) translateY(0); }
     #toast.success { color: var(--green); }
@@ -206,8 +246,6 @@
     #install-tooltip-close { float: right; background: none; border: none; color: var(--text3); font-size: 16px; cursor: pointer; padding: 0; margin: -2px -2px 0 8px; line-height: 1; }
     #install-tooltip-close:hover { color: var(--text); }
 
-    .results-count { font-size: 12px; color: var(--text3); margin-bottom: 12px; text-align: right; }
-
     /* ── Rate display ── */
     .stat-pay { font-size: 13px; color: var(--green); margin-top: 3px; font-weight: 600; }
     .log-pay  { font-size: 12px; color: var(--green); font-weight: 600; margin-top: 2px; }
@@ -234,15 +272,37 @@
 
     /* ── Summary modal content ── */
     .summary-header { margin-bottom: 20px; }
-    .summary-header h3 { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
     .summary-meta { font-size: 13px; color: var(--text2); line-height: 1.7; }
-    .summary-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-    .summary-table th { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text3); text-align: left; padding: 0 0 8px; border-bottom: 1px solid var(--border); }
+    .summary-table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
+    .summary-table th {
+      font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase;
+      color: var(--text3); text-align: left; padding: 0 0 8px; border-bottom: 1px solid var(--border);
+    }
     .summary-table th:last-child, .summary-table td:last-child { text-align: right; }
-    .summary-table td { font-size: 14px; padding: 10px 0; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: top; }
+    .summary-table td {
+      font-size: 14px; padding: 10px 0; border-bottom: 1px solid var(--border);
+      color: var(--text); vertical-align: top;
+    }
     .summary-table td:nth-child(2), .summary-table th:nth-child(2) { text-align: right; padding-right: 16px; }
-    .summary-totals { display: flex; justify-content: space-between; padding-top: 12px; font-size: 15px; font-weight: 700; }
-    .summary-totals span:last-child { color: var(--green); }
+    /* Category group header row */
+    .summary-cat-header td {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--orange); padding: 14px 0 4px; border-bottom: none;
+    }
+    /* Per-category subtotal row */
+    .summary-subtotal td {
+      font-size: 13px; font-weight: 600; color: var(--text2);
+      background: var(--bg3); padding: 7px 6px; border-bottom: 1px solid var(--border);
+    }
+    .summary-subtotal td:first-child { padding-left: 10px; border-radius: 4px 0 0 4px; }
+    .summary-subtotal td:last-child  { border-radius: 0 4px 4px 0; color: var(--green); }
+    /* Grand total row (tfoot) */
+    .summary-total-row td {
+      font-size: 15px; font-weight: 700; padding-top: 14px;
+      border-top: 2px solid var(--border); border-bottom: none;
+    }
+    .summary-total-row td:last-child { color: var(--green); }
+
     .summary-date-selector { margin-bottom: 20px; }
     .radio-group { display: flex; gap: 10px; margin-bottom: 14px; }
     .radio-btn {
@@ -255,6 +315,15 @@
     /* ── Report selector section labels ── */
     .selector-section-label { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text3); margin: 14px 0 8px; }
     .selector-section-label:first-child { margin-top: 0; }
+
+    /* ── Report category chips (multi-select) ── */
+    .report-cat-wrap { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .report-cat-chip {
+      padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 500;
+      cursor: pointer; border: 1px solid var(--border); background: var(--bg3);
+      color: var(--text2); transition: all .15s; user-select: none;
+    }
+    .report-cat-chip.active { background: var(--orange); border-color: var(--orange); color: #fff; }
 
     /* ── Rate inputs in profile modal ── */
     .rate-row { display: flex; gap: 10px; }
@@ -282,14 +351,13 @@
     <div class="logo">
       <div class="logo-icon">
         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm.5 11H11V7h1.5v6zm0 4H11v-2h1.5v2z"/>
           <rect x="11" y="7" width="1.5" height="6" rx="0.75"/>
           <polygon points="11.5,13 15,13 11.5,18"/>
         </svg>
       </div>
       Punchcard
     </div>
-    <div style="display:flex; align-items:center; gap:10px;">
+    <div style="display:flex; align-items:center; gap:8px;">
       <div id="install-info-wrap">
         <button id="install-info-btn" onclick="toggleInstallTooltip()" aria-label="Add to Home Screen instructions">📲</button>
         <div id="install-tooltip" role="tooltip">
@@ -298,6 +366,7 @@
           On iPhone: tap Share → "Add to Home Screen".<br>On Android: tap the menu → "Add to Home Screen".
         </div>
       </div>
+      <button class="btn-theme" id="theme-toggle-btn" onclick="toggleTheme()" aria-label="Toggle theme">☀️</button>
       <button class="worker-badge" onclick="openWorkerModal()" aria-label="Change worker name">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
@@ -310,7 +379,7 @@
   <!-- NAV -->
   <nav role="tablist">
     <button role="tab" class="active" onclick="switchTab('clock')"   id="tab-clock">⏱ Clock</button>
-    <button role="tab"               onclick="switchTab('history')" id="tab-history">📋 History</button>
+    <button role="tab"               onclick="switchTab('history')" id="tab-history">📋 Logs</button>
   </nav>
 
   <!-- ═══════════ CLOCK SCREEN ═══════════ -->
@@ -378,7 +447,7 @@
 
   </section>
 
-  <!-- ═══════════ HISTORY SCREEN ═══════════ -->
+  <!-- ═══════════ HISTORY / LOGS SCREEN ═══════════ -->
   <section class="screen" id="screen-history">
 
     <!-- Stats -->
@@ -395,53 +464,73 @@
       </div>
     </div>
 
-    <!-- Filters -->
-    <div class="filter-bar">
-      <div class="card-title">Filter logs</div>
-      <div class="filter-row">
-        <div>
-          <label>From</label>
-          <input type="date" id="filter-from" onchange="applyFilters()" />
-        </div>
-        <div>
-          <label>To</label>
-          <input type="date" id="filter-to" onchange="applyFilters()" />
-        </div>
-        <div>
-          <label>Project</label>
-          <select id="filter-project" onchange="applyFilters()">
-            <option value="">All projects</option>
-          </select>
-        </div>
-        <div>
-          <label>Category</label>
-          <select id="filter-category" onchange="applyFilters()">
-            <option value="">All categories</option>
-            <!-- populated dynamically from Projects sheet -->
-          </select>
-        </div>
-        <div id="filter-worker-wrap" style="display:none;">
-          <label>Worker</label>
-          <select id="filter-worker" onchange="applyFilters()">
-            <option value="">All workers</option>
-          </select>
-        </div>
-      </div>
-      <button class="btn btn-secondary btn-filter-clear" style="margin-top:12px;" onclick="clearFilters()">Clear filters</button>
-    </div>
-
+    <!-- Generate Report (above filters) -->
     <button class="btn-summary" onclick="openSummaryModal()">📄 Generate Report</button>
 
-    <div class="card" style="margin-bottom:8px;">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <span style="font-size:11px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:var(--text3);">Recent logs</span>
-        <button onclick="loadHistory()" style="background:none; border:none; color:var(--orange); font-size:13px; cursor:pointer; font-weight:600;">Refresh ↻</button>
+    <!-- Filters (collapsible) -->
+    <div class="filter-bar">
+      <div class="filter-bar-header">
+        <span class="card-title">Filter logs</span>
+        <button class="filter-toggle-btn" onclick="toggleFilters()" id="filter-toggle-btn">
+          <span id="filter-toggle-icon">▾</span> Collapse
+        </button>
+      </div>
+      <div id="filter-content">
+        <div class="filter-row" style="margin-top:12px;">
+          <div>
+            <label>From</label>
+            <input type="date" id="filter-from" onchange="applyFilters()" />
+          </div>
+          <div>
+            <label>To</label>
+            <input type="date" id="filter-to" onchange="applyFilters()" />
+          </div>
+          <div>
+            <label>Category</label>
+            <select id="filter-category" onchange="applyFilters()">
+              <option value="">All categories</option>
+              <!-- populated dynamically from Projects sheet -->
+            </select>
+          </div>
+          <div>
+            <label>Project</label>
+            <select id="filter-project" onchange="applyFilters()">
+              <option value="">All projects</option>
+            </select>
+          </div>
+          <div id="filter-worker-wrap" style="display:none;">
+            <label>Worker</label>
+            <select id="filter-worker" onchange="applyFilters()">
+              <option value="">All workers</option>
+            </select>
+          </div>
+          <div>
+            <label>Sort</label>
+            <select id="filter-sort" onchange="applyFilters()">
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-filter-clear" style="margin-top:12px;" onclick="clearFilters()">Clear filters</button>
       </div>
     </div>
 
-    <div class="results-count" id="results-count" style="display:none;"></div>
+    <!-- Log toolbar: count + refresh -->
+    <div class="log-toolbar">
+      <span class="results-count" id="results-count"></span>
+      <button class="btn-refresh" onclick="loadHistory()">↻ Refresh</button>
+    </div>
+
     <div id="history-list">
       <div class="empty"><div class="spinner"></div><p style="margin-top:12px;">Loading…</p></div>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination" id="pagination" style="display:none;">
+      <button class="btn-page" id="btn-prev" onclick="changePage(-1)">← Prev</button>
+      <span class="page-info" id="page-info"></span>
+      <button class="btn-page" id="btn-next" onclick="changePage(1)">Next →</button>
     </div>
 
   </section>
@@ -499,7 +588,7 @@
       <div id="admin-section" style="display:none; margin-top:12px;">
         <label for="admin-input">Admin passcode</label>
         <input type="text" id="admin-input" placeholder="Enter passcode…" autocomplete="off" />
-        <p style="font-size:12px; color:var(--text3); margin-top:-10px; margin-bottom:0; line-height:1.5;">Unlocks all-worker view in History. Leave blank for standard access (your entries only).</p>
+        <p style="font-size:12px; color:var(--text3); margin-top:-10px; margin-bottom:0; line-height:1.5;">Unlocks all-worker view in Logs. Leave blank for standard access (your entries only).</p>
       </div>
     </div>
   </div>
@@ -559,10 +648,8 @@
         </select>
       </div>
       <div>
-        <label for="summary-category">Category</label>
-        <select id="summary-category" onchange="populateSummaryDropdowns()">
-          <option value="">All categories</option>
-        </select>
+        <label>Categories</label>
+        <div id="summary-category-chips" class="report-cat-wrap"></div>
       </div>
       <div>
         <label for="summary-project">Project</label>
@@ -581,12 +668,8 @@
       <table class="summary-table" id="summary-table">
         <thead id="summary-thead"></thead>
         <tbody id="summary-rows"></tbody>
+        <tfoot id="summary-tfoot"></tfoot>
       </table>
-      <div class="summary-totals">
-        <span>Total</span>
-        <span id="summary-total-hrs"></span>
-        <span id="summary-total-pay"></span>
-      </div>
       <div style="display:flex; gap:10px; margin-top:20px;">
         <button class="btn btn-submit" id="summary-print-btn" onclick="printSummary()" style="flex:1;">Print / Save PDF</button>
         <button class="btn btn-secondary" id="summary-close-btn" onclick="closeSummaryModal()" style="flex:1;">Close</button>
@@ -614,13 +697,23 @@
   let selectedCategory = "";
 
   // ── User preferences ──────────────────────────────────────────────────────
-  let rateType     = localStorage.getItem("ft_rate_type")   || "hourly"; // "hourly"|"daily"
+  let rateType     = localStorage.getItem("ft_rate_type")   || "hourly";
   let rateAmount   = parseFloat(localStorage.getItem("ft_rate_amount") || "0");
-  let weekStartDay = parseInt(localStorage.getItem("ft_week_start_day") || "1", 10); // 0=Sun…6=Sat
+  let weekStartDay = parseInt(localStorage.getItem("ft_week_start_day") || "1", 10);
 
-  // ── Summary state ─────────────────────────────────────────────────────────
-  let workerRates     = {};   // { "Name": { rateType, rateAmount } } — fetched from sheet
-  let lastSummaryData = null; // cached summary for printSummary()
+  // ── Summary / report state ────────────────────────────────────────────────
+  let workerRates              = {};
+  let lastSummaryData          = null;
+  let selectedReportCategories = []; // [] = all, ['A'] = one, ['A','B'] = multi
+  let reportAvailableCategories = [];
+
+  // ── Pagination state ──────────────────────────────────────────────────────
+  let filteredLogs = [];
+  let currentPage  = 1;
+  const PAGE_SIZE  = 25;
+
+  // ── Filter collapse state ─────────────────────────────────────────────────
+  let filtersOpen = true;
 
   // ── Init ──────────────────────────────────────────────────────────────────
   document.addEventListener("DOMContentLoaded", () => {
@@ -628,6 +721,7 @@
       navigator.serviceWorker.register("./sw.js").catch(() => {});
     }
 
+    initTheme();
     updateWorkerDisplay();
     if (!workerName) setTimeout(openWorkerModal, 600);
 
@@ -635,9 +729,7 @@
 
     const isStandalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
     if (!isStandalone) {
-      // Always show the header icon so instructions are accessible
       document.getElementById("install-info-btn").style.display = "flex";
-      // Only show the full banner if the user hasn't dismissed it
       if (!localStorage.getItem("ft_install_dismissed")) {
         document.getElementById("install-banner").style.display = "block";
       }
@@ -648,7 +740,6 @@
     if (saved) {
       const ts  = parseInt(saved, 10);
       const age = Date.now() - ts;
-      // Discard any saved timer older than 16 hours — treat it as abandoned
       if (!isNaN(ts) && ts > 0 && age < 16 * 3600 * 1000) {
         startTimestamp = ts;
         restoreTimer();
@@ -657,6 +748,21 @@
       }
     }
   });
+
+  // ── Theme ─────────────────────────────────────────────────────────────────
+  function initTheme() {
+    const saved = localStorage.getItem("ft_theme") || "dark";
+    document.documentElement.setAttribute("data-theme", saved);
+    document.getElementById("theme-toggle-btn").textContent = saved === "dark" ? "☀️" : "🌙";
+  }
+
+  function toggleTheme() {
+    const current = document.documentElement.getAttribute("data-theme") || "dark";
+    const next    = current === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("ft_theme", next);
+    document.getElementById("theme-toggle-btn").textContent = next === "dark" ? "☀️" : "🌙";
+  }
 
   // ── Tabs ──────────────────────────────────────────────────────────────────
   function switchTab(tab) {
@@ -686,8 +792,8 @@
     const section = document.getElementById("admin-section");
     const icon    = document.getElementById("admin-toggle-icon");
     const isOpen  = section.style.display !== "none";
-    section.style.display   = isOpen ? "none" : "block";
-    icon.textContent        = isOpen ? "▸" : "▾";
+    section.style.display = isOpen ? "none" : "block";
+    icon.textContent      = isOpen ? "▸" : "▾";
   }
 
   function closeWorkerModal() {
@@ -695,7 +801,7 @@
   }
 
   function saveWorkerName() {
-    const val  = document.getElementById("worker-input").value.trim();
+    const val = document.getElementById("worker-input").value.trim();
     if (!val) { toast("Please enter your name.", "error"); return; }
     const code    = document.getElementById("admin-input").value.trim();
     const rType   = document.getElementById("rate-type-select").value;
@@ -708,7 +814,7 @@
     rateAmount   = rAmt;
     weekStartDay = wkStart;
 
-    localStorage.setItem("ft_worker", val);
+    localStorage.setItem("ft_worker",         val);
     localStorage.setItem("ft_rate_type",      rType);
     localStorage.setItem("ft_rate_amount",     rAmt.toString());
     localStorage.setItem("ft_week_start_day",  wkStart.toString());
@@ -719,7 +825,6 @@
     closeWorkerModal();
     toast("Saved! 👋", "success");
 
-    // Sync rate to sheet in background (non-blocking)
     apiFetch({ action: "saveWorkerRate", workerName: val, rateType: rType, rateAmount: rAmt })
       .catch(err => console.warn("Rate sync failed:", err));
 
@@ -735,7 +840,7 @@
   // ── Projects ──────────────────────────────────────────────────────────────
   async function fetchProjects() {
     try {
-      const res  = await apiFetch({ action: "getProjects" });
+      const res   = await apiFetch({ action: "getProjects" });
       allProjects = res.projects || [];
       renderCategoryDropdown();
       populateFilterCategoryDropdown();
@@ -759,32 +864,44 @@
   }
 
   function populateFilterCategoryDropdown() {
-    const sel = document.getElementById("filter-category");
+    const sel  = document.getElementById("filter-category");
     const prev = sel.value;
     sel.innerHTML = '<option value="">All categories</option>' +
       uniqueCategories().map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
-    if (prev) sel.value = prev; // preserve any active filter
+    if (prev) sel.value = prev;
   }
 
   function populateFilterProjectDropdown() {
-    const sel = document.getElementById("filter-project");
+    const sel   = document.getElementById("filter-project");
     const names = [...new Set(allProjects.map(p => p.name))];
     sel.innerHTML = '<option value="">All projects</option>' +
       names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
   }
 
-  // ── Category selection (clock-out form) ──────────────────────────────────
+  // ── Category selection (clock-out form) ───────────────────────────────────
   function selectCategory(cat) {
     selectedCategory = cat;
-    // Filter the project dropdown to the selected category
-    const filtered = cat ? allProjects.filter(p => p.category === cat) : allProjects;
-    const sel = document.getElementById("f-project");
+    const filtered   = cat ? allProjects.filter(p => p.category === cat) : [];
+    const sel        = document.getElementById("f-project");
     if (!cat) {
       sel.innerHTML = '<option value="">Select a category first…</option>';
     } else {
       sel.innerHTML = filtered.length
         ? '<option value="">Select a project…</option>' + filtered.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join("")
         : '<option value="">No projects in this category</option>';
+    }
+  }
+
+  // ── Filter collapse ────────────────────────────────────────────────────────
+  function toggleFilters() {
+    filtersOpen = !filtersOpen;
+    document.getElementById("filter-content").style.display   = filtersOpen ? "" : "none";
+    document.getElementById("filter-toggle-icon").textContent = filtersOpen ? "▾" : "▸";
+    // Update the text label (last text node inside the button)
+    const btn  = document.getElementById("filter-toggle-btn");
+    const last = btn.childNodes[btn.childNodes.length - 1];
+    if (last && last.nodeType === Node.TEXT_NODE) {
+      last.textContent = filtersOpen ? " Collapse" : " Expand";
     }
   }
 
@@ -820,7 +937,6 @@
     if (!workerName) setTimeout(openWorkerModal, 800);
   }
 
-  // Restores a running timer on page reload without resetting the timestamp
   function restoreTimer() {
     const elStart   = document.getElementById("btn-start");
     const elStop    = document.getElementById("btn-stop");
@@ -854,18 +970,17 @@
     endTimestamp  = Date.now();
     localStorage.removeItem("ft_timer_start");
 
-    document.getElementById("btn-start").style.display   = "block";
-    document.getElementById("btn-stop").style.display    = "none";
-    document.getElementById("timer-clock").className     = "timer-clock stopped";
-    document.getElementById("timer-status").textContent  = "Clocked out";
+    document.getElementById("btn-start").style.display    = "block";
+    document.getElementById("btn-stop").style.display     = "none";
+    document.getElementById("timer-clock").className      = "timer-clock stopped";
+    document.getElementById("timer-status").textContent   = "Clocked out";
     document.getElementById("timer-started-at").textContent = "";
-    document.getElementById("timer-clock").textContent   = fmtElapsed(endTimestamp - startTimestamp);
+    document.getElementById("timer-clock").textContent    = fmtElapsed(endTimestamp - startTimestamp);
 
     document.getElementById("f-start").value = toTimeInput(new Date(startTimestamp));
     document.getElementById("f-end").value   = toTimeInput(new Date(endTimestamp));
     recalcDuration();
 
-    // Reset category and project selection
     selectedCategory = "";
     document.getElementById("f-category").value = "";
     document.getElementById("f-project").innerHTML = '<option value="">Select a category first…</option>';
@@ -891,9 +1006,6 @@
     document.getElementById("calc-duration").textContent = diff > 0 ? diff.toFixed(2) + " hrs" : "—";
   }
 
-  // Converts a time input value "HH:MM" to a Date object set to that local time today.
-  // Uses setHours() so local time is unambiguous — avoids Safari/iOS parsing
-  // "YYYY-MM-DDTHH:MM" as UTC instead of local time.
   function timeToDate(timeStr) {
     const [h, m] = timeStr.split(":").map(Number);
     const d = new Date();
@@ -901,7 +1013,6 @@
     return d;
   }
 
-  // Converts a time input value "HH:MM" to a UTC ISO string via timeToDate.
   function timeInputToISO(timeStr) {
     return timeToDate(timeStr).toISOString();
   }
@@ -913,14 +1024,12 @@
     const startT  = document.getElementById("f-start").value;
     const endT    = document.getElementById("f-end").value;
 
-    if (!workerName)        { openWorkerModal(); return; }
-    if (!selectedCategory)  { toast("Please select a category.", "error"); return; }
-    if (!project)           { toast("Please select a house / project.", "error"); return; }
-    if (!desc)              { toast("Please describe the work done.", "error"); return; }
-    if (!startT || !endT)   { toast("Start and end time required.", "error"); return; }
+    if (!workerName)       { openWorkerModal(); return; }
+    if (!selectedCategory) { toast("Please select a category.", "error"); return; }
+    if (!project)          { toast("Please select a house / project.", "error"); return; }
+    if (!desc)             { toast("Please describe the work done.", "error"); return; }
+    if (!startT || !endT)  { toast("Start and end time required.", "error"); return; }
 
-    // Build ISO timestamps using setHours() so local time is unambiguous
-    // (avoids Safari/iOS mis-parsing "YYYY-MM-DDTHH:MM" as UTC instead of local)
     const startISO = timeInputToISO(startT);
     const endISO   = timeInputToISO(endT);
 
@@ -969,22 +1078,24 @@
   async function loadHistory() {
     const list = document.getElementById("history-list");
     list.innerHTML = `<div class="empty"><div class="spinner"></div><p style="margin-top:12px;">Loading…</p></div>`;
-    document.getElementById("stats-grid").style.display = "none";
-    document.getElementById("results-count").style.display = "none";
+    document.getElementById("stats-grid").style.display  = "none";
+    document.getElementById("pagination").style.display  = "none";
+    document.getElementById("results-count").textContent = "";
 
     try {
-      const params = { action: "getLogs", workerName: workerName };
+      const params = { action: "getLogs", workerName };
       if (adminCode) params.adminCode = adminCode;
-      const res = await apiFetch(params);
+      const res   = await apiFetch(params);
       allLogs     = res.logs || [];
       isAdminMode = res.isAdmin || false;
-      // Fetch per-worker rates so history cards show each worker's own pay
+
       if (isAdminMode) {
         try {
           const ratesRes = await apiFetch({ action: "getWorkerRates", adminCode });
           workerRates = ratesRes.rates || {};
         } catch(e) { workerRates = {}; }
       }
+
       updateAdminUI();
       renderStats(allLogs);
       applyFilters();
@@ -1010,26 +1121,32 @@
     const project = document.getElementById("filter-project").value;
     const cat     = document.getElementById("filter-category").value;
     const worker  = isAdminMode ? document.getElementById("filter-worker").value : "";
+    const sort    = document.getElementById("filter-sort").value; // "newest" | "oldest"
 
-    let filtered = allLogs.filter(log => {
+    let logs = allLogs.filter(log => {
       const d = normalizeDate(log["Date"]);
       if (from && d < from) return false;
       if (to   && d > to)   return false;
-      if (project && log["Project"]  !== project)    return false;
-      if (cat     && log["Category"] !== cat)        return false;
+      if (project && log["Project"]    !== project) return false;
+      if (cat     && log["Category"]   !== cat)     return false;
       if (worker  && log["Worker Name"] !== worker)  return false;
       return true;
     });
 
-    renderHistory(filtered);
+    logs.sort((a, b) => {
+      const da = normalizeDate(a["Date"]);
+      const db = normalizeDate(b["Date"]);
+      // Secondary sort by start time for same-day entries
+      const ta = String(a["Start Time"] || "");
+      const tb = String(b["Start Time"] || "");
+      const cmp = sort === "oldest" ? da.localeCompare(db) : db.localeCompare(da);
+      if (cmp !== 0) return cmp;
+      return sort === "oldest" ? ta.localeCompare(tb) : tb.localeCompare(ta);
+    });
 
-    const countEl = document.getElementById("results-count");
-    if (from || to || project || cat) {
-      countEl.textContent  = filtered.length + " result" + (filtered.length !== 1 ? "s" : "");
-      countEl.style.display = "block";
-    } else {
-      countEl.style.display = "none";
-    }
+    filteredLogs = logs;
+    currentPage  = 1;
+    renderHistory();
   }
 
   function clearFilters() {
@@ -1037,13 +1154,20 @@
     document.getElementById("filter-to").value       = "";
     document.getElementById("filter-project").value  = "";
     document.getElementById("filter-category").value = "";
+    document.getElementById("filter-sort").value     = "newest";
     if (isAdminMode) document.getElementById("filter-worker").value = "";
     applyFilters();
   }
 
-  function renderHistory(logs) {
-    const list = document.getElementById("history-list");
-    if (!logs.length) {
+  function renderHistory() {
+    const list      = document.getElementById("history-list");
+    const countEl   = document.getElementById("results-count");
+    const total     = filteredLogs.length;
+    const totalPages = Math.ceil(total / PAGE_SIZE);
+
+    countEl.textContent = total + " log" + (total !== 1 ? "s" : "");
+
+    if (!total) {
       list.innerHTML = `<div class="empty">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M9 12h6M9 16h6M7 3H5a2 2 0 00-2 2v16a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2h-2"/>
@@ -1051,17 +1175,21 @@
         </svg>
         <p>No logs found.</p>
       </div>`;
+      document.getElementById("pagination").style.display = "none";
       return;
     }
 
-    list.innerHTML = logs.slice(0, 50).map(log => {
+    const start     = (currentPage - 1) * PAGE_SIZE;
+    const pageItems = filteredLogs.slice(start, start + PAGE_SIZE);
+
+    list.innerHTML = pageItems.map(log => {
       const dur      = parseDuration(log["Duration (hrs)"]);
       const project  = log["Project"] || log["Category"] || "Unknown Project";
       const dateLong = formatDateLong(normalizeDate(log["Date"]));
       const startFmt = normalizeTime(log["Start Time"]);
       const endFmt   = normalizeTime(log["End Time"]);
       const durStr   = dur >= 0.1 ? dur.toFixed(2) + "h" : (dur * 60).toFixed(0) + "m";
-      // In admin mode use the individual worker's rate; otherwise use own rate
+
       let pay;
       if (isAdminMode && log["Worker Name"]) {
         const wr = workerRates[log["Worker Name"]];
@@ -1071,17 +1199,17 @@
       } else {
         pay = calcPay(dur);
       }
-      const payStr   = pay !== null ? fmtPay(pay) : "";
+      const payStr     = pay !== null ? fmtPay(pay) : "";
       const workerLine = (isAdminMode && log["Worker Name"])
         ? `<span class="log-worker">${esc(log["Worker Name"])}</span>` : "";
-      const logId    = esc(log["ID"] || "");
-      // Encode edit data safely for onclick
+
       const editData = encodeURIComponent(JSON.stringify({
         id:    log["ID"] || "",
         start: amPmToHHMM(log["Start Time"]),
         end:   amPmToHHMM(log["End Time"]),
         desc:  log["Description"] || ""
       }));
+
       return `<div class="log-item">
         <div class="log-top">
           <div class="log-project">${esc(project)}</div>
@@ -1098,12 +1226,29 @@
         </div>
       </div>`;
     }).join("");
+
+    // Pagination
+    const pag = document.getElementById("pagination");
+    if (totalPages <= 1) {
+      pag.style.display = "none";
+    } else {
+      pag.style.display = "flex";
+      document.getElementById("btn-prev").disabled      = currentPage <= 1;
+      document.getElementById("btn-next").disabled      = currentPage >= totalPages;
+      document.getElementById("page-info").textContent  = `Page ${currentPage} of ${totalPages}`;
+    }
+  }
+
+  function changePage(delta) {
+    const totalPages = Math.ceil(filteredLogs.length / PAGE_SIZE);
+    currentPage = Math.max(1, Math.min(totalPages, currentPage + delta));
+    renderHistory();
+    document.getElementById("history-list").scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function renderStats(logs) {
     const today = localDateISO(new Date());
     const { start: weekStart, end: weekEnd } = getWeekRange(weekStartDay);
-    const weekEndDay = weekStartDay === 0 ? 6 : weekStartDay - 1;
 
     let todayHrs = 0, weekHrs = 0;
     let todayPaySum = 0, weekPaySum = 0;
@@ -1117,7 +1262,6 @@
       if (isToday) todayHrs += hrs;
       if (isWeek)  weekHrs  += hrs;
 
-      // Per-worker pay in admin mode; own rate otherwise
       let pay;
       if (isAdminMode && log["Worker Name"]) {
         const wr = workerRates[log["Worker Name"]];
@@ -1151,14 +1295,13 @@
     document.getElementById("stats-grid").style.display    = "grid";
   }
 
-  // Returns YYYY-MM-DD using local calendar date
+  // ── Date / time helpers ───────────────────────────────────────────────────
   function localDateISO(d) {
     return d.getFullYear() + "-" +
       String(d.getMonth() + 1).padStart(2, "0") + "-" +
       String(d.getDate()).padStart(2, "0");
   }
 
-  // Returns { start, end } ISO dates for the current week given a start day (0=Sun…6=Sat)
   function getWeekRange(startDay) {
     const d = new Date();
     let diff = d.getDay() - startDay;
@@ -1168,56 +1311,24 @@
     return { start: localDateISO(start), end: localDateISO(end) };
   }
 
-  // ── Pay helpers ───────────────────────────────────────────────────────────
-  function calcPay(hrs) {
-    if (!rateAmount || rateAmount <= 0) return null;
-    return rateType === "daily" ? (hrs / 8) * rateAmount : hrs * rateAmount;
-  }
-  function fmtPay(amount) {
-    return "$" + amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  }
-
-  // Formats YYYY-MM-DD as "May 18"
-  function formatDateShort(iso) {
-    const d = new Date(iso + "T12:00:00");
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  }
-
-  // Formats YYYY-MM-DD as "May 18, 2026"
-  function formatDateLong(iso) {
-    if (!iso) return "";
-    const d = new Date(iso + "T12:00:00");
-    if (isNaN(d.getTime())) return iso.substring(0, 10) || "—";
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  }
-
-  // Normalizes a date value to "YYYY-MM-DD".
-  // Handles plain strings ("2026-05-27") and ISO timestamps ("2026-05-27T05:00:00.000Z")
-  // that Sheets produces when it auto-converts date cells.
   function normalizeDate(val) {
     return String(val || "").substring(0, 10);
   }
 
-  // Normalizes a time value to "8:00 AM" format.
-  // Handles "8:00 AM" strings and ISO timestamps from Sheets auto-conversion.
   function normalizeTime(val) {
     const s = String(val || "");
     if (!s) return "";
     if (s.includes("T")) {
       const d = new Date(s);
       if (isNaN(d.getTime())) return s;
-      // 1899 epoch = time-only cell — read UTC directly to avoid TZ shift
       const h = d.getUTCFullYear() <= 1900 ? d.getUTCHours()   : d.getHours();
       const m = d.getUTCFullYear() <= 1900 ? d.getUTCMinutes() : d.getMinutes();
       const ampm = h >= 12 ? "PM" : "AM";
       return (h % 12 || 12) + ":" + String(m).padStart(2, "0") + " " + ampm;
     }
-    // Backend returns "8:00 AM" — return as-is (already correct format)
     return s;
   }
 
-  // Parses a duration value that may be a number, numeric string, or an ISO
-  // timestamp produced when Sheets formats the Duration column as a time cell.
   function parseDuration(val) {
     if (typeof val === "number") return val;
     const s = String(val || "");
@@ -1230,8 +1341,29 @@
     return parseFloat(s) || 0;
   }
 
+  // ── Pay helpers ───────────────────────────────────────────────────────────
+  function calcPay(hrs) {
+    if (!rateAmount || rateAmount <= 0) return null;
+    return rateType === "daily" ? (hrs / 8) * rateAmount : hrs * rateAmount;
+  }
+
+  function fmtPay(amount) {
+    return "$" + amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function formatDateShort(iso) {
+    const d = new Date(iso + "T12:00:00");
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  }
+
+  function formatDateLong(iso) {
+    if (!iso) return "";
+    const d = new Date(iso + "T12:00:00");
+    if (isNaN(d.getTime())) return iso.substring(0, 10) || "—";
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  }
+
   // ── API ───────────────────────────────────────────────────────────────────
-  // Uses POST so params (including admin code) never appear in the URL.
   async function apiFetch(params) {
     const res = await fetch(API_URL, {
       method:   "POST",
@@ -1260,7 +1392,7 @@
   }
 
   function esc(str) {
-    return String(str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    return String(str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   }
 
   function toast(msg, type = "success") {
@@ -1274,10 +1406,10 @@
   function openEditModal(jsonStr) {
     let data;
     try { data = JSON.parse(jsonStr); } catch(e) { toast("Could not open entry.", "error"); return; }
-    document.getElementById("edit-log-id").value  = data.id   || "";
-    document.getElementById("edit-start").value   = data.start || "";
-    document.getElementById("edit-end").value     = data.end   || "";
-    document.getElementById("edit-desc").value    = data.desc  || "";
+    document.getElementById("edit-log-id").value = data.id    || "";
+    document.getElementById("edit-start").value  = data.start || "";
+    document.getElementById("edit-end").value    = data.end   || "";
+    document.getElementById("edit-desc").value   = data.desc  || "";
     document.getElementById("edit-modal").classList.add("open");
   }
 
@@ -1291,9 +1423,9 @@
     const end   = document.getElementById("edit-end").value;
     const desc  = document.getElementById("edit-desc").value.trim();
 
-    if (!id)    { toast("Missing entry ID.", "error"); return; }
-    if (!start || !end) { toast("Start and end time required.", "error"); return; }
-    if (start >= end)   { toast("End time must be after start time.", "error"); return; }
+    if (!id)             { toast("Missing entry ID.", "error"); return; }
+    if (!start || !end)  { toast("Start and end time required.", "error"); return; }
+    if (start >= end)    { toast("End time must be after start time.", "error"); return; }
 
     const btn = document.getElementById("edit-save-btn");
     btn.disabled = true; btn.textContent = "Saving…";
@@ -1314,7 +1446,6 @@
     }
   }
 
-  // Convert "12:29 PM" → "12:29" (HH:MM for time input)
   function amPmToHHMM(val) {
     const s = String(val || "").trim();
     const m = s.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
@@ -1327,8 +1458,8 @@
     return String(h).padStart(2, "0") + ":" + min;
   }
 
-  // ── Weekly summary modal ──────────────────────────────────────────────────
-  let summaryOption = "current"; // "current" | "custom"
+  // ── Report modal ──────────────────────────────────────────────────────────
+  let summaryOption = "current";
 
   function openSummaryModal() {
     showSummarySelector();
@@ -1336,7 +1467,7 @@
     document.getElementById("summary-from").value = start;
     document.getElementById("summary-to").value   = end;
 
-    // Admin: populate worker selector
+    // Admin: populate worker selector, pre-fill from active filter
     const workerWrap = document.getElementById("summary-worker-wrap");
     if (isAdminMode) {
       const names = [...new Set(allLogs.map(l => l["Worker Name"]).filter(Boolean))].sort();
@@ -1344,11 +1475,27 @@
       sel.innerHTML = '<option value="">All workers</option>' +
         names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
       workerWrap.style.display = "";
+      const activeWorker = document.getElementById("filter-worker").value;
+      if (activeWorker) sel.value = activeWorker;
     } else {
       workerWrap.style.display = "none";
     }
 
+    // Pre-fill category from active filter
+    const activeCat = document.getElementById("filter-category").value;
+    selectedReportCategories = activeCat ? [activeCat] : [];
+
     populateSummaryDropdowns();
+
+    // Pre-fill project from active filter (after dropdowns are built)
+    const activeProject = document.getElementById("filter-project").value;
+    if (activeProject) {
+      const projSel = document.getElementById("summary-project");
+      if ([...projSel.options].some(o => o.value === activeProject)) {
+        projSel.value = activeProject;
+      }
+    }
+
     document.getElementById("summary-modal").classList.add("open");
   }
 
@@ -1365,13 +1512,38 @@
   function setSummaryOption(opt) {
     summaryOption = opt;
     document.getElementById("summary-opt-current").classList.toggle("active", opt === "current");
-    document.getElementById("summary-opt-custom").classList.toggle("active", opt === "custom");
+    document.getElementById("summary-opt-custom").classList.toggle("active",  opt === "custom");
     document.getElementById("summary-custom-range").style.display = opt === "custom" ? "" : "none";
     populateSummaryDropdowns();
   }
 
-  // Populate category and project dropdowns based on current selections.
-  // Category is independent; Project is filtered by the selected category.
+  // ── Report category chips ─────────────────────────────────────────────────
+  function renderReportCategoryChips(categories) {
+    reportAvailableCategories = categories;
+    const wrap     = document.getElementById("summary-category-chips");
+    const allActive = selectedReportCategories.length === 0;
+    wrap.innerHTML =
+      `<div class="report-cat-chip${allActive ? " active" : ""}" data-cat="__all__">All</div>` +
+      categories.map(c =>
+        `<div class="report-cat-chip${selectedReportCategories.includes(c) ? " active" : ""}" data-cat="${esc(c)}">${esc(c)}</div>`
+      ).join("");
+
+    wrap.querySelectorAll(".report-cat-chip").forEach(chip => {
+      chip.addEventListener("click", () => {
+        const cat = chip.dataset.cat;
+        if (cat === "__all__") {
+          selectedReportCategories = [];
+        } else {
+          const idx = selectedReportCategories.indexOf(cat);
+          if (idx >= 0) selectedReportCategories.splice(idx, 1);
+          else           selectedReportCategories.push(cat);
+        }
+        renderReportCategoryChips(reportAvailableCategories);
+        populateSummaryDropdowns();
+      });
+    });
+  }
+
   function populateSummaryDropdowns() {
     let fromISO = "", toISO = "";
     if (summaryOption === "current") {
@@ -1385,7 +1557,6 @@
     const workerSel      = document.getElementById("summary-worker");
     const selectedWorker = isAdminMode && workerSel ? (workerSel.value || "") : workerName;
 
-    // Base filter: date range + permissions + worker
     const base = allLogs.filter(log => {
       const d = normalizeDate(log["Date"]);
       if (fromISO && d < fromISO) return false;
@@ -1395,22 +1566,20 @@
       return true;
     });
 
-    // Categories — not filtered by project (broad grouping comes first)
+    // Categories
     const categories = [...new Set(base.map(l => l["Category"] || "").filter(Boolean))].sort();
-    const catSel  = document.getElementById("summary-category");
-    const prevCat = catSel.value;
-    catSel.innerHTML = '<option value="">All categories</option>' +
-      categories.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
-    if (prevCat && categories.includes(prevCat)) catSel.value = prevCat;
+    // Remove any selected categories that no longer exist in the data
+    selectedReportCategories = selectedReportCategories.filter(c => categories.includes(c));
+    renderReportCategoryChips(categories);
 
-    // Projects — filtered by selected category so the list stays relevant
-    const currCategory = catSel.value;
+    // Projects filtered by selected categories
     const projects = [...new Set(
       base
-        .filter(l => !currCategory || (l["Category"] || "") === currCategory)
+        .filter(l => selectedReportCategories.length === 0 || selectedReportCategories.includes(l["Category"] || ""))
         .map(l => l["Project"] || l["Category"] || "")
         .filter(Boolean)
     )].sort();
+
     const projSel  = document.getElementById("summary-project");
     const prevProj = projSel.value;
     projSel.innerHTML = '<option value="">All projects</option>' +
@@ -1424,168 +1593,251 @@
     genBtn.innerHTML = `<span class="spinner" style="vertical-align:middle; margin-right:8px;"></span>Loading…`;
 
     try {
-    let fromISO, toISO;
-    if (summaryOption === "current") {
-      const range = getWeekRange(weekStartDay);
-      fromISO = range.start; toISO = range.end;
-    } else {
-      fromISO = document.getElementById("summary-from").value;
-      toISO   = document.getElementById("summary-to").value;
-      if (!fromISO || !toISO) { toast("Select a date range.", "error"); return; }
-      if (fromISO > toISO)    { toast("From date must be before To date.", "error"); return; }
-    }
-
-    const selectedWorker   = isAdminMode
-      ? (document.getElementById("summary-worker").value || "")
-      : workerName;
-    const selectedCategory = document.getElementById("summary-category").value || "";
-    const selectedProject  = document.getElementById("summary-project").value || "";
-    const groupByWorker    = isAdminMode && selectedWorker === "";
-
-    // Fetch per-worker rates from sheet whenever admin is generating a summary
-    if (isAdminMode) {
-      try {
-        const res = await apiFetch({ action: "getWorkerRates", adminCode });
-        workerRates = res.rates || {};
-      } catch(e) { workerRates = {}; }
-    }
-
-    // Filter logs by date, worker, and project
-    const filtered = allLogs.filter(log => {
-      const d = normalizeDate(log["Date"]);
-      if (d < fromISO || d > toISO) return false;
-      if (!isAdminMode && (log["Worker Name"] || "").trim() !== workerName) return false;
-      if (!groupByWorker && selectedWorker) {
-        if ((log["Worker Name"] || "").trim() !== selectedWorker) return false;
+      let fromISO, toISO;
+      if (summaryOption === "current") {
+        const range = getWeekRange(weekStartDay);
+        fromISO = range.start; toISO = range.end;
+      } else {
+        fromISO = document.getElementById("summary-from").value;
+        toISO   = document.getElementById("summary-to").value;
+        if (!fromISO || !toISO) { toast("Select a date range.", "error"); return; }
+        if (fromISO > toISO)    { toast("From date must be before To date.", "error"); return; }
       }
-      if (selectedCategory) {
-        if ((log["Category"] || "") !== selectedCategory) return false;
-      }
-      if (selectedProject) {
-        if ((log["Project"] || log["Category"] || "") !== selectedProject) return false;
-      }
-      return true;
-    });
 
-    // Aggregate hours by group key
-    const groupMap = {};
-    filtered.forEach(log => {
-      const key = groupByWorker
-        ? (log["Worker Name"] || "Unknown Worker")
-        : (log["Project"] || log["Category"] || "Unknown");
-      if (!groupMap[key]) groupMap[key] = 0;
-      groupMap[key] += parseDuration(log["Duration (hrs)"]);
-    });
+      const selectedWorker  = isAdminMode
+        ? (document.getElementById("summary-worker").value || "")
+        : workerName;
+      const selectedProject = document.getElementById("summary-project").value || "";
+      const groupByWorker   = isAdminMode && selectedWorker === "";
+      // Multi-category grouping: only when 2+ cats selected and not grouping by worker
+      const groupByCategory = !groupByWorker && selectedReportCategories.length > 1;
+      // Single-category label for meta (when 0 or 1 cat selected)
+      const singleCat       = selectedReportCategories.length === 1 ? selectedReportCategories[0] : "";
 
-    // Build rows — per-worker rates when groupByWorker, otherwise user's own rate
-    let totalHrs = 0, totalPaySum = 0, hasAnyPay = false;
-    const rowData = Object.entries(groupMap)
-      .sort((a, b) => b[1] - a[1])
-      .map(([label, hrs]) => {
-        totalHrs += hrs;
-        let pay = null, rateLabel = "";
-        if (groupByWorker) {
-          const wr = workerRates[label];
-          if (wr && wr.rateAmount > 0) {
-            pay = wr.rateType === "daily" ? (hrs / 8) * wr.rateAmount : hrs * wr.rateAmount;
-            rateLabel = wr.rateType === "daily"
-              ? `$${wr.rateAmount.toFixed(2)}/day`
-              : `$${wr.rateAmount.toFixed(2)}/hr`;
-            hasAnyPay = true; totalPaySum += pay;
-          } else { rateLabel = "—"; }
-        } else {
-          // Admin viewing a specific worker → use that worker's sheet rate
-          // Otherwise use the current user's own rate
-          if (isAdminMode && selectedWorker && selectedWorker !== workerName) {
-            const wr = workerRates[selectedWorker];
-            if (wr && wr.rateAmount > 0) {
-              pay = wr.rateType === "daily" ? (hrs / 8) * wr.rateAmount : hrs * wr.rateAmount;
-            }
-          } else {
-            pay = calcPay(hrs);
-          }
-          if (pay !== null) { hasAnyPay = true; totalPaySum += pay; }
-        }
-        return { label, hrs, rateLabel, pay };
+      if (isAdminMode) {
+        try {
+          const res = await apiFetch({ action: "getWorkerRates", adminCode });
+          workerRates = res.rates || {};
+        } catch(e) { workerRates = {}; }
+      }
+
+      // Filter logs
+      const filtered = allLogs.filter(log => {
+        const d = normalizeDate(log["Date"]);
+        if (d < fromISO || d > toISO) return false;
+        if (!isAdminMode && (log["Worker Name"] || "").trim() !== workerName) return false;
+        if (!groupByWorker && selectedWorker && (log["Worker Name"] || "").trim() !== selectedWorker) return false;
+        if (selectedReportCategories.length > 0 && !selectedReportCategories.includes(log["Category"] || "")) return false;
+        if (selectedProject && (log["Project"] || log["Category"] || "") !== selectedProject) return false;
+        return true;
       });
 
-    const totalPay = hasAnyPay ? totalPaySum : null;
+      const summaryFor = groupByWorker ? "All workers" : (selectedWorker || workerName || "—");
 
-    // Table HTML
-    const colSpan = groupByWorker ? 4 : 3;
-    const theadHTML = groupByWorker
-      ? `<tr><th>Worker</th><th>Rate</th><th>Hours</th><th>Amount</th></tr>`
-      : `<th>Project</th><th>Hours</th><th>Amount</th>`;
-    const rowsHTML = rowData.length
-      ? rowData.map(r => groupByWorker
-          ? `<tr><td>${esc(r.label)}</td><td>${r.rateLabel}</td><td>${r.hrs.toFixed(2)}h</td><td>${r.pay !== null ? fmtPay(r.pay) : "—"}</td></tr>`
-          : `<tr><td>${esc(r.label)}</td><td>${r.hrs.toFixed(2)}h</td><td>${r.pay !== null ? fmtPay(r.pay) : "—"}</td></tr>`
-        ).join("")
-      : `<tr><td colspan="${colSpan}" style="color:var(--text3);padding-top:12px;">No entries in this range.</td></tr>`;
+      // Helper: compute pay for a given hrs value in the current report context
+      function payForContext(hrs) {
+        if (isAdminMode && selectedWorker && selectedWorker !== workerName) {
+          const wr = workerRates[selectedWorker];
+          if (wr && wr.rateAmount > 0) return wr.rateType === "daily" ? (hrs / 8) * wr.rateAmount : hrs * wr.rateAmount;
+          return null;
+        }
+        return calcPay(hrs);
+      }
 
-    // Determine rate description for the meta block
-    const summaryFor = groupByWorker ? "All workers" : (selectedWorker || workerName || "—");
-    let rateDesc;
-    if (isAdminMode && selectedWorker && selectedWorker !== workerName) {
-      const wr = workerRates[selectedWorker];
-      rateDesc = (wr && wr.rateAmount > 0)
-        ? (wr.rateType === "daily" ? `$${wr.rateAmount.toFixed(2)}/day (8h day)` : `$${wr.rateAmount.toFixed(2)}/hr`)
-        : "—";
-    } else {
-      rateDesc = rateAmount > 0
-        ? (rateType === "daily" ? `$${rateAmount.toFixed(2)}/day (8h day)` : `$${rateAmount.toFixed(2)}/hr`)
-        : "—";
-    }
-    const metaHTML =
-      `<strong style="color:var(--text)">${esc(summaryFor)}</strong><br>` +
-      (selectedCategory ? `<span style="color:var(--text2);font-size:13px;">${esc(selectedCategory)}</span><br>` : "") +
-      (selectedProject  ? `<span style="color:var(--text2);font-size:13px;">${esc(selectedProject)}</span><br>`  : "") +
-      `${formatDateLong(fromISO)} – ${formatDateLong(toISO)}` +
-      (groupByWorker ? "" : `<br>Rate: ${rateDesc}`);
+      // ── Multi-category grouped report ─────────────────────────────────────
+      if (groupByCategory) {
+        const sections = selectedReportCategories.map(cat => {
+          const catLogs = filtered.filter(l => (l["Category"] || "") === cat);
+          const projMap = {};
+          catLogs.forEach(log => {
+            const key = log["Project"] || log["Category"] || "Unknown";
+            if (!projMap[key]) projMap[key] = 0;
+            projMap[key] += parseDuration(log["Duration (hrs)"]);
+          });
+          const rows = Object.entries(projMap).sort((a, b) => b[1] - a[1]).map(([proj, hrs]) => ({
+            proj, hrs, pay: payForContext(hrs)
+          }));
+          const catHrs = rows.reduce((s, r) => s + r.hrs, 0);
+          const anyPay = rows.some(r => r.pay !== null);
+          const catPay = anyPay ? rows.reduce((s, r) => s + (r.pay || 0), 0) : null;
+          return { cat, rows, catHrs, catPay };
+        }).filter(sec => sec.rows.length > 0);
 
-    // Render modal
-    document.getElementById("summary-thead").innerHTML = theadHTML;
-    document.getElementById("summary-meta").innerHTML  = metaHTML;
-    document.getElementById("summary-rows").innerHTML  = rowsHTML;
-    document.getElementById("summary-total-hrs").textContent = totalHrs.toFixed(2) + "h";
-    document.getElementById("summary-total-pay").textContent = totalPay !== null ? fmtPay(totalPay) : "—";
-    document.getElementById("summary-modal-title").style.display = "none";
-    document.getElementById("summary-date-selector").style.display = "none";
-    document.getElementById("summary-content").style.display = "";
+        const totalHrs    = sections.reduce((s, sec) => s + sec.catHrs, 0);
+        const hasAnyPay   = sections.some(sec => sec.catPay !== null);
+        const totalPay    = hasAnyPay ? sections.reduce((s, sec) => s + (sec.catPay || 0), 0) : null;
+        const catListStr  = selectedReportCategories.join(", ");
 
-    // Cache for print
-    lastSummaryData = { summaryFor, selectedCategory, selectedProject, fromISO, toISO, groupByWorker, rateDesc, rowData, totalHrs, totalPay };
+        const theadHTML = `<tr><th>Project</th><th>Hours</th><th>Amount</th></tr>`;
+        let rowsHTML = "";
+        sections.forEach(sec => {
+          rowsHTML += `<tr class="summary-cat-header"><td colspan="3">${esc(sec.cat)}</td></tr>`;
+          sec.rows.forEach(r => {
+            rowsHTML += `<tr>
+              <td style="padding-left:14px;">${esc(r.proj)}</td>
+              <td>${r.hrs.toFixed(2)}h</td>
+              <td>${r.pay !== null ? fmtPay(r.pay) : "—"}</td>
+            </tr>`;
+          });
+          rowsHTML += `<tr class="summary-subtotal">
+            <td>Subtotal — ${esc(sec.cat)}</td>
+            <td>${sec.catHrs.toFixed(2)}h</td>
+            <td>${sec.catPay !== null ? fmtPay(sec.catPay) : "—"}</td>
+          </tr>`;
+        });
+        if (!rowsHTML) rowsHTML = `<tr><td colspan="3" style="color:var(--text3);padding-top:12px;">No entries in this range.</td></tr>`;
+
+        const tfootHTML = `<tr class="summary-total-row">
+          <td><strong>Total</strong></td>
+          <td>${totalHrs.toFixed(2)}h</td>
+          <td>${totalPay !== null ? fmtPay(totalPay) : "—"}</td>
+        </tr>`;
+
+        const metaHTML =
+          `<strong style="color:var(--text)">${esc(summaryFor)}</strong><br>` +
+          `<span style="color:var(--text2)">${esc(catListStr)}</span><br>` +
+          (selectedProject ? `<span style="color:var(--text2)">${esc(selectedProject)}</span><br>` : "") +
+          `${formatDateLong(fromISO)} – ${formatDateLong(toISO)}`;
+
+        document.getElementById("summary-thead").innerHTML = theadHTML;
+        document.getElementById("summary-meta").innerHTML  = metaHTML;
+        document.getElementById("summary-rows").innerHTML  = rowsHTML;
+        document.getElementById("summary-tfoot").innerHTML = tfootHTML;
+
+        lastSummaryData = { summaryFor, selectedCategory: catListStr, selectedProject, fromISO, toISO,
+          groupByWorker: false, groupByCategory: true, rateDesc: "", rowData: null,
+          sections, totalHrs, totalPay };
+
+      // ── Standard (single/all category) report ────────────────────────────
+      } else {
+        const groupMap = {};
+        filtered.forEach(log => {
+          const key = groupByWorker
+            ? (log["Worker Name"] || "Unknown Worker")
+            : (log["Project"] || log["Category"] || "Unknown");
+          if (!groupMap[key]) groupMap[key] = 0;
+          groupMap[key] += parseDuration(log["Duration (hrs)"]);
+        });
+
+        let totalHrs = 0, totalPaySum = 0, hasAnyPay = false;
+        const rowData = Object.entries(groupMap)
+          .sort((a, b) => b[1] - a[1])
+          .map(([label, hrs]) => {
+            totalHrs += hrs;
+            let pay = null, rateLabel = "";
+            if (groupByWorker) {
+              const wr = workerRates[label];
+              if (wr && wr.rateAmount > 0) {
+                pay = wr.rateType === "daily" ? (hrs / 8) * wr.rateAmount : hrs * wr.rateAmount;
+                rateLabel = wr.rateType === "daily" ? `$${wr.rateAmount.toFixed(2)}/day` : `$${wr.rateAmount.toFixed(2)}/hr`;
+                hasAnyPay = true; totalPaySum += pay;
+              } else { rateLabel = "—"; }
+            } else {
+              pay = payForContext(hrs);
+              if (pay !== null) { hasAnyPay = true; totalPaySum += pay; }
+            }
+            return { label, hrs, rateLabel, pay };
+          });
+
+        const totalPay = hasAnyPay ? totalPaySum : null;
+
+        const colSpan   = groupByWorker ? 4 : 3;
+        const theadHTML = groupByWorker
+          ? `<tr><th>Worker</th><th>Rate</th><th>Hours</th><th>Amount</th></tr>`
+          : `<tr><th>Project</th><th>Hours</th><th>Amount</th></tr>`;
+        const rowsHTML = rowData.length
+          ? rowData.map(r => groupByWorker
+              ? `<tr><td>${esc(r.label)}</td><td>${r.rateLabel}</td><td>${r.hrs.toFixed(2)}h</td><td>${r.pay !== null ? fmtPay(r.pay) : "—"}</td></tr>`
+              : `<tr><td>${esc(r.label)}</td><td>${r.hrs.toFixed(2)}h</td><td>${r.pay !== null ? fmtPay(r.pay) : "—"}</td></tr>`
+            ).join("")
+          : `<tr><td colspan="${colSpan}" style="color:var(--text3);padding-top:12px;">No entries in this range.</td></tr>`;
+
+        const tfootHTML = groupByWorker
+          ? `<tr class="summary-total-row"><td colspan="2"><strong>Total</strong></td><td>${totalHrs.toFixed(2)}h</td><td>${totalPay !== null ? fmtPay(totalPay) : "—"}</td></tr>`
+          : `<tr class="summary-total-row"><td><strong>Total</strong></td><td>${totalHrs.toFixed(2)}h</td><td>${totalPay !== null ? fmtPay(totalPay) : "—"}</td></tr>`;
+
+        // Rate description for meta
+        let rateDesc;
+        if (isAdminMode && selectedWorker && selectedWorker !== workerName) {
+          const wr = workerRates[selectedWorker];
+          rateDesc = (wr && wr.rateAmount > 0)
+            ? (wr.rateType === "daily" ? `$${wr.rateAmount.toFixed(2)}/day (8h day)` : `$${wr.rateAmount.toFixed(2)}/hr`)
+            : "—";
+        } else {
+          rateDesc = rateAmount > 0
+            ? (rateType === "daily" ? `$${rateAmount.toFixed(2)}/day (8h day)` : `$${rateAmount.toFixed(2)}/hr`)
+            : "—";
+        }
+
+        const metaHTML =
+          `<strong style="color:var(--text)">${esc(summaryFor)}</strong><br>` +
+          (singleCat       ? `<span style="color:var(--text2)">${esc(singleCat)}</span><br>`       : "") +
+          (selectedProject ? `<span style="color:var(--text2)">${esc(selectedProject)}</span><br>` : "") +
+          `${formatDateLong(fromISO)} – ${formatDateLong(toISO)}` +
+          (groupByWorker ? "" : `<br>Rate: ${rateDesc}`);
+
+        document.getElementById("summary-thead").innerHTML = theadHTML;
+        document.getElementById("summary-meta").innerHTML  = metaHTML;
+        document.getElementById("summary-rows").innerHTML  = rowsHTML;
+        document.getElementById("summary-tfoot").innerHTML = tfootHTML;
+
+        lastSummaryData = { summaryFor, selectedCategory: singleCat, selectedProject, fromISO, toISO,
+          groupByWorker, groupByCategory: false, rateDesc, rowData, sections: null, totalHrs, totalPay };
+      }
+
+      document.getElementById("summary-modal-title").style.display  = "none";
+      document.getElementById("summary-date-selector").style.display = "none";
+      document.getElementById("summary-content").style.display       = "";
 
     } catch(err) {
-      toast("Could not generate summary.", "error");
+      toast("Could not generate report.", "error");
       console.error("generateSummary error:", err);
     } finally {
-      genBtn.disabled = false;
+      genBtn.disabled    = false;
       genBtn.textContent = "Generate";
     }
   }
 
   function printSummary() {
-    if (!lastSummaryData) { toast("Generate a summary first.", "error"); return; }
-    const { summaryFor, selectedCategory, selectedProject, fromISO, toISO, groupByWorker, rateDesc, rowData, totalHrs, totalPay } = lastSummaryData;
+    if (!lastSummaryData) { toast("Generate a report first.", "error"); return; }
+    const { summaryFor, selectedCategory, selectedProject, fromISO, toISO,
+            groupByWorker, groupByCategory, rateDesc, rowData, sections, totalHrs, totalPay } = lastSummaryData;
 
     const title = `${summaryFor} · ${formatDateShort(fromISO)} – ${formatDateShort(toISO)}`;
-    const metaTxt = summaryFor + "\n" +
+
+    let metaTxt = summaryFor + "\n" +
       (selectedCategory ? selectedCategory + "\n" : "") +
       (selectedProject  ? selectedProject  + "\n" : "") +
-      formatDateLong(fromISO) + " – " + formatDateLong(toISO) +
-      (groupByWorker ? "" : "\nRate: " + rateDesc);
+      formatDateLong(fromISO) + " – " + formatDateLong(toISO);
+    if (!groupByWorker && !groupByCategory) metaTxt += "\nRate: " + rateDesc;
 
-    const theadRow = groupByWorker
-      ? `<tr><th>Worker</th><th>Rate</th><th>Hours</th><th>Amount</th></tr>`
-      : `<tr><th>Project</th><th>Hours</th><th>Amount</th></tr>`;
+    let theadRow, tbodyRows, totalPayStr = totalPay !== null ? fmtPay(totalPay) : "—";
+    let tfootRow;
 
-    const tbodyRows = rowData.map(r => groupByWorker
-      ? `<tr><td>${esc(r.label)}</td><td>${r.rateLabel}</td><td>${r.hrs.toFixed(2)}h</td><td>${r.pay !== null ? fmtPay(r.pay) : "—"}</td></tr>`
-      : `<tr><td>${esc(r.label)}</td><td>${r.hrs.toFixed(2)}h</td><td>${r.pay !== null ? fmtPay(r.pay) : "—"}</td></tr>`
-    ).join("");
-
-    const totalPayStr = totalPay !== null ? fmtPay(totalPay) : "—";
+    if (groupByCategory) {
+      theadRow = `<tr><th>Project</th><th>Hours</th><th>Amount</th></tr>`;
+      tbodyRows = "";
+      sections.forEach(sec => {
+        tbodyRows += `<tr class="cat-header"><td colspan="3">${esc(sec.cat)}</td></tr>`;
+        sec.rows.forEach(r => {
+          tbodyRows += `<tr><td style="padding-left:14px;">${esc(r.proj)}</td><td>${r.hrs.toFixed(2)}h</td><td>${r.pay !== null ? fmtPay(r.pay) : "—"}</td></tr>`;
+        });
+        tbodyRows += `<tr class="subtotal"><td>Subtotal — ${esc(sec.cat)}</td><td>${sec.catHrs.toFixed(2)}h</td><td>${sec.catPay !== null ? fmtPay(sec.catPay) : "—"}</td></tr>`;
+      });
+      tfootRow = `<tr class="total-row"><td><strong>Total</strong></td><td>${totalHrs.toFixed(2)}h</td><td>${totalPayStr}</td></tr>`;
+    } else if (groupByWorker) {
+      theadRow = `<tr><th>Worker</th><th>Rate</th><th>Hours</th><th>Amount</th></tr>`;
+      tbodyRows = rowData.map(r =>
+        `<tr><td>${esc(r.label)}</td><td>${r.rateLabel}</td><td>${r.hrs.toFixed(2)}h</td><td>${r.pay !== null ? fmtPay(r.pay) : "—"}</td></tr>`
+      ).join("");
+      tfootRow = `<tr class="total-row"><td colspan="2"><strong>Total</strong></td><td>${totalHrs.toFixed(2)}h</td><td>${totalPayStr}</td></tr>`;
+    } else {
+      theadRow = `<tr><th>Project</th><th>Hours</th><th>Amount</th></tr>`;
+      tbodyRows = rowData.map(r =>
+        `<tr><td>${esc(r.label)}</td><td>${r.hrs.toFixed(2)}h</td><td>${r.pay !== null ? fmtPay(r.pay) : "—"}</td></tr>`
+      ).join("");
+      tfootRow = `<tr class="total-row"><td><strong>Total</strong></td><td>${totalHrs.toFixed(2)}h</td><td>${totalPayStr}</td></tr>`;
+    }
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -1595,34 +1847,29 @@
   <style>
     @media print { @page { margin: 1.2cm 1.5cm; } }
     body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #111; background: #fff; padding: 32px; max-width: 720px; margin: 0 auto; }
-    h1 { font-size: 19px; font-weight: 700; margin: 0 0 10px; }
+    h1   { font-size: 19px; font-weight: 700; margin: 0 0 10px; }
     .meta { font-size: 13px; color: #555; line-height: 1.8; margin-bottom: 24px; white-space: pre-line; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; }
     th { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #888; text-align: left; padding: 0 0 8px; border-bottom: 2px solid #ddd; }
-    th:nth-child(2) { text-align: right; padding-right: 20px; }
-    th:nth-child(3), td:nth-child(3) { text-align: right; padding-right: 20px; }
+    th:nth-child(2), td:nth-child(2) { text-align: right; padding-right: 20px; }
     th:last-child, td:last-child { text-align: right; }
     td { font-size: 14px; padding: 9px 0; border-bottom: 1px solid #eee; color: #111; }
-    td:nth-child(2) { text-align: right; padding-right: 20px; color: #555; }
-    .totals { display: flex; justify-content: space-between; padding-top: 14px; font-size: 15px; font-weight: 700; border-top: 2px solid #ddd; }
-    .totals-right { display: flex; gap: 36px; }
-    .green { color: #2e7d4f; }
+    .cat-header td { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #E8773A; padding: 14px 0 4px; border-bottom: none; }
+    .subtotal td { font-size: 13px; font-weight: 600; color: #555; background: #f5f5f5; padding: 7px 6px; }
+    .subtotal td:first-child { padding-left: 10px; }
+    .subtotal td:last-child  { color: #2e7d4f; }
+    .total-row td { font-size: 15px; font-weight: 700; border-top: 2px solid #ddd; border-bottom: none; padding-top: 14px; }
+    .total-row td:last-child { color: #2e7d4f; }
   </style>
 </head>
 <body>
-  <h1>Weekly Summary</h1>
+  <h1>Punchcard Report</h1>
   <div class="meta">${metaTxt}</div>
   <table>
     <thead>${theadRow}</thead>
     <tbody>${tbodyRows}</tbody>
+    <tfoot>${tfootRow}</tfoot>
   </table>
-  <div class="totals">
-    <span>Total</span>
-    <div class="totals-right">
-      <span>${totalHrs.toFixed(2)}h</span>
-      <span class="green">${totalPayStr}</span>
-    </div>
-  </div>
 </body>
 </html>`;
 
@@ -1633,7 +1880,7 @@
     win.onload = () => { win.focus(); win.print(); };
   }
 
-  // ── Install banner / tooltip ─────────────────────────────────────────────
+  // ── Install banner / tooltip ──────────────────────────────────────────────
   function dismissInstallBanner() {
     document.getElementById("install-banner").style.display = "none";
     localStorage.setItem("ft_install_dismissed", "1");
@@ -1643,7 +1890,6 @@
     document.getElementById("install-tooltip").classList.toggle("open");
   }
 
-  // Close install tooltip when clicking outside it
   document.addEventListener("click", e => {
     const wrap = document.getElementById("install-info-wrap");
     const tt   = document.getElementById("install-tooltip");
