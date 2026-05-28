@@ -190,15 +190,55 @@
     /* ── Toast ── */
     #toast {
       position: fixed; bottom: calc(24px + var(--safe-bot)); left: 50%;
-      transform: translateX(-50%) translateY(80px);
+      transform: translateX(-50%) translateY(200px);
+      opacity: 0;
       background: var(--bg2); border: 1px solid var(--border); border-radius: 24px;
       padding: 12px 20px; font-size: 14px; font-weight: 500; white-space: nowrap;
-      z-index: 100; transition: transform .35s cubic-bezier(0.34, 1.56, 0.64, 1);
+      z-index: 100; transition: transform .35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity .25s ease;
       box-shadow: 0 8px 32px rgba(0,0,0,0.4);
     }
-    #toast.show    { transform: translateX(-50%) translateY(0); }
+    #toast.show    { transform: translateX(-50%) translateY(0); opacity: 1; }
     #toast.success { color: var(--green); }
     #toast.error   { color: var(--red);   }
+
+    /* ── Print Overlay ── */
+    #print-overlay {
+      display: none; position: fixed; inset: 0; z-index: 9999;
+      background: #fff; color: #111; overflow-y: auto;
+      padding: 32px 24px calc(100px + var(--safe-bot));
+      font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    }
+    #print-overlay.open { display: block; }
+    #print-overlay h1   { font-size: 19px; font-weight: 700; margin: 0 0 10px; color: #111; }
+    #print-overlay .meta { font-size: 13px; color: #555; line-height: 1.8; margin-bottom: 24px; }
+    #print-overlay table { width: 100%; border-collapse: collapse; }
+    #print-overlay th { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #888; text-align: left; padding: 0 0 8px; border-bottom: 2px solid #ddd; }
+    #print-overlay th:nth-child(2), #print-overlay td:nth-child(2) { text-align: right; padding-right: 20px; }
+    #print-overlay th:last-child,   #print-overlay td:last-child   { text-align: right; }
+    #print-overlay td { font-size: 14px; padding: 9px 0; border-bottom: 1px solid #eee; color: #111; }
+    #print-overlay .cat-header td { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #E8773A; padding: 14px 0 4px; border-bottom: none; text-align: left; }
+    #print-overlay .subtotal td { font-size: 13px; font-weight: 600; color: #555; background: #f5f5f5; padding: 7px 6px; }
+    #print-overlay .subtotal td:first-child { padding-left: 10px; }
+    #print-overlay .subtotal td:last-child  { color: #2e7d4f; }
+    #print-overlay tfoot .total-row td { font-size: 15px; font-weight: 700; border-top: 2px solid #ddd; border-bottom: none; padding-top: 14px; }
+    #print-overlay tfoot .total-row td:last-child { color: #2e7d4f; }
+    #print-overlay-actions {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      padding: 12px 20px calc(12px + var(--safe-bot));
+      background: #fff; border-top: 1px solid #ddd;
+      display: flex; gap: 10px; z-index: 10000;
+    }
+    #print-overlay-actions button {
+      flex: 1; padding: 14px; border: none; border-radius: 12px;
+      font-size: 16px; font-weight: 600; cursor: pointer;
+    }
+    #print-overlay-actions .po-back   { background: #eee; color: #111; }
+    #print-overlay-actions .po-print  { background: #E8773A; color: #fff; }
+    @media print {
+      #app, #toast { display: none !important; }
+      #print-overlay { display: block !important; position: static !important; overflow: visible !important; padding: 0 !important; }
+      #print-overlay-actions { display: none !important; }
+    }
 
     /* ── Modal ── */
     .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 50; align-items: flex-end; }
@@ -693,6 +733,14 @@
 </div>
 
 <div id="toast" role="alert" aria-live="assertive"></div>
+
+<div id="print-overlay">
+  <div id="print-overlay-body"></div>
+  <div id="print-overlay-actions">
+    <button class="po-back"  onclick="closePrintOverlay()">← Back</button>
+    <button class="po-print" onclick="window.print()">Print / Save PDF</button>
+  </div>
+</div>
 
 <script>
   // ── CONFIG ────────────────────────────────────────────────────────────────
@@ -1917,45 +1965,25 @@
       tfootRow = `<tr class="total-row"><td><strong>Total</strong></td><td>${fmtHours(totalHrs)}</td><td>${totalPayStr}</td></tr>`;
     }
 
-    const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Punchcard – ${title}</title>
-  <style>
-    @media print { @page { margin: 1.2cm 1.5cm; } }
-    body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #111; background: #fff; padding: 32px; max-width: 720px; margin: 0 auto; }
-    h1   { font-size: 19px; font-weight: 700; margin: 0 0 10px; }
-    .meta { font-size: 13px; color: #555; line-height: 1.8; margin-bottom: 24px; white-space: pre-line; }
-    table { width: 100%; border-collapse: collapse; }
-    th { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #888; text-align: left; padding: 0 0 8px; border-bottom: 2px solid #ddd; }
-    th:nth-child(2), td:nth-child(2) { text-align: right; padding-right: 20px; }
-    th:last-child, td:last-child { text-align: right; }
-    td { font-size: 14px; padding: 9px 0; border-bottom: 1px solid #eee; color: #111; }
-    .cat-header td { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #E8773A; padding: 14px 0 4px; border-bottom: none; text-align: left; }
-    .subtotal td { font-size: 13px; font-weight: 600; color: #555; background: #f5f5f5; padding: 7px 6px; }
-    .subtotal td:first-child { padding-left: 10px; }
-    .subtotal td:last-child  { color: #2e7d4f; }
-    .total-row td { font-size: 15px; font-weight: 700; border-top: 2px solid #ddd; border-bottom: none; padding-top: 14px; }
-    .total-row td:last-child { color: #2e7d4f; }
-  </style>
-</head>
-<body>
-  <h1>Punchcard Report</h1>
-  <div class="meta">${metaTxt}</div>
-  <table>
-    <thead>${theadRow}</thead>
-    <tbody>${tbodyRows}</tbody>
-    <tfoot>${tfootRow}</tfoot>
-  </table>
-</body>
-</html>`;
+    // Build meta lines as individual <p> tags so line breaks render correctly in innerHTML
+    const metaLines = metaTxt.split("\n").map(l => `<p style="margin:0;line-height:1.8;">${esc(l)}</p>`).join("");
 
-    const win = window.open("", "_blank", "width=750,height=950");
-    if (!win) { toast("Allow pop-ups to generate PDF.", "error"); return; }
-    win.document.write(html);
-    win.document.close();
-    win.onload = () => { win.focus(); win.print(); };
+    document.getElementById("print-overlay-body").innerHTML =
+      `<h1>Punchcard Report</h1>
+       <div class="meta">${metaLines}</div>
+       <table>
+         <thead>${theadRow}</thead>
+         <tbody>${tbodyRows}</tbody>
+         <tfoot>${tfootRow}</tfoot>
+       </table>`;
+
+    const overlay = document.getElementById("print-overlay");
+    overlay.classList.add("open");
+    overlay.scrollTop = 0;
+  }
+
+  function closePrintOverlay() {
+    document.getElementById("print-overlay").classList.remove("open");
   }
 
   // ── Install banner / tooltip ──────────────────────────────────────────────
