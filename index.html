@@ -116,15 +116,6 @@
     }
     .duration-chip strong { color: var(--text); }
 
-    /* ── Category pills ── */
-    .category-pills { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-    .pill {
-      padding: 8px 16px; border-radius: 20px; font-size: 14px; font-weight: 500;
-      cursor: pointer; border: 1px solid var(--border); background: var(--bg3);
-      color: var(--text2); transition: all .15s;
-    }
-    .pill.active { background: var(--orange); border-color: var(--orange); color: #fff; }
-
     /* ── Log list ── */
     .log-item { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
     .log-top  { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
@@ -368,12 +359,10 @@
         </div>
       </div>
 
-      <label>Category</label>
-      <div class="category-pills" id="category-pills">
-        <div class="pill" onclick="selectCategory('New Construction')">New Construction</div>
-        <div class="pill" onclick="selectCategory('Rental')">Rental</div>
-        <div class="pill" onclick="selectCategory('Other')">Other</div>
-      </div>
+      <label for="f-category">Category</label>
+      <select id="f-category" onchange="selectCategory(this.value)">
+        <option value="">Select a category…</option>
+      </select>
 
       <label for="f-project">House / Project</label>
       <select id="f-project">
@@ -428,9 +417,7 @@
           <label>Category</label>
           <select id="filter-category" onchange="applyFilters()">
             <option value="">All categories</option>
-            <option value="New Construction">New Construction</option>
-            <option value="Rental">Rental</option>
-            <option value="Other">Other</option>
+            <!-- populated dynamically from Projects sheet -->
           </select>
         </div>
         <div id="filter-worker-wrap" style="display:none;">
@@ -750,6 +737,8 @@
     try {
       const res  = await apiFetch({ action: "getProjects" });
       allProjects = res.projects || [];
+      renderCategoryDropdown();
+      populateFilterCategoryDropdown();
       populateFilterProjectDropdown();
     } catch (err) {
       console.error("fetchProjects failed:", err);
@@ -757,25 +746,46 @@
     }
   }
 
+  function uniqueCategories() {
+    return [...new Set(allProjects.map(p => p.category).filter(Boolean))].sort();
+  }
+
+  function renderCategoryDropdown() {
+    const sel  = document.getElementById("f-category");
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">Select a category…</option>' +
+      uniqueCategories().map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
+    if (prev) sel.value = prev;
+  }
+
+  function populateFilterCategoryDropdown() {
+    const sel = document.getElementById("filter-category");
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">All categories</option>' +
+      uniqueCategories().map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
+    if (prev) sel.value = prev; // preserve any active filter
+  }
+
   function populateFilterProjectDropdown() {
     const sel = document.getElementById("filter-project");
     const names = [...new Set(allProjects.map(p => p.name))];
     sel.innerHTML = '<option value="">All projects</option>' +
-      names.map(n => `<option value="${n}">${n}</option>`).join("");
+      names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
   }
 
-  // ── Category pill selection (clock-out form) ───────────────────────────────
+  // ── Category selection (clock-out form) ──────────────────────────────────
   function selectCategory(cat) {
     selectedCategory = cat;
-    document.querySelectorAll("#category-pills .pill").forEach(p => {
-      p.classList.toggle("active", p.textContent === cat);
-    });
-    // Filter the project dropdown to matching category
-    const filtered = allProjects.filter(p => p.category === cat);
+    // Filter the project dropdown to the selected category
+    const filtered = cat ? allProjects.filter(p => p.category === cat) : allProjects;
     const sel = document.getElementById("f-project");
-    sel.innerHTML = filtered.length
-      ? '<option value="">Select a project…</option>' + filtered.map(p => `<option value="${p.name}">${p.name}</option>`).join("")
-      : '<option value="">No projects in this category</option>';
+    if (!cat) {
+      sel.innerHTML = '<option value="">Select a category first…</option>';
+    } else {
+      sel.innerHTML = filtered.length
+        ? '<option value="">Select a project…</option>' + filtered.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join("")
+        : '<option value="">No projects in this category</option>';
+    }
   }
 
   // ── Timer ─────────────────────────────────────────────────────────────────
@@ -855,9 +865,9 @@
     document.getElementById("f-end").value   = toTimeInput(new Date(endTimestamp));
     recalcDuration();
 
-    // Reset category selection
+    // Reset category and project selection
     selectedCategory = "";
-    document.querySelectorAll("#category-pills .pill").forEach(p => p.classList.remove("active"));
+    document.getElementById("f-category").value = "";
     document.getElementById("f-project").innerHTML = '<option value="">Select a category first…</option>';
 
     document.getElementById("submit-card").style.display = "block";
@@ -941,7 +951,7 @@
         document.getElementById("timer-clock").className     = "timer-clock";
         document.getElementById("timer-status").textContent  = "Ready to clock in";
         selectedCategory = "";
-        document.querySelectorAll("#category-pills .pill").forEach(p => p.classList.remove("active"));
+        document.getElementById("f-category").value = "";
         startTimestamp = null;
         endTimestamp   = null;
       } else {
