@@ -1,5 +1,5 @@
-const CACHE = "punchcard-v15";
-const ASSETS = ["./index.html", "./manifest.json"];
+const CACHE = "punchcard-v16";
+const ASSETS = ["./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
