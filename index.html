@@ -1785,38 +1785,67 @@
           groupByWorker: false, groupByCategory: true, rateDesc, rowData: null,
           sections, totalHrs, totalPay };
 
-      // ── Worker-grouped report (admin, all workers) ────────────────────────
+      // ── Worker-as-subtotal report (admin, all workers) ───────────────────
       } else {
-        const groupMap = {};
-        filtered.forEach(log => {
-          const key = log["Worker Name"] || "Unknown Worker";
-          if (!groupMap[key]) groupMap[key] = 0;
-          groupMap[key] += parseDuration(log["Duration (hrs)"]);
-        });
+        // Each worker is a section header; categories are the line items within
+        const wNames = [...new Set(filtered.map(l => l["Worker Name"] || "Unknown").filter(Boolean))].sort();
 
-        let totalHrs = 0, totalPaySum = 0, hasAnyPay = false;
-        const rowData = Object.entries(groupMap)
-          .sort((a, b) => b[1] - a[1])
-          .map(([label, hrs]) => {
-            totalHrs += hrs;
-            let pay = null, rateLabel = "";
-            const wr = workerRates[label];
-            if (wr && wr.rateAmount > 0) {
-              pay = wr.rateType === "daily" ? (hrs / 8) * wr.rateAmount : hrs * wr.rateAmount;
-              rateLabel = wr.rateType === "daily" ? `$${wr.rateAmount.toFixed(2)}/day` : `$${wr.rateAmount.toFixed(2)}/hr`;
-              hasAnyPay = true; totalPaySum += pay;
-            } else { rateLabel = "—"; }
-            return { label, hrs, rateLabel, pay };
+        const workerSections = wNames.map(wName => {
+          const wLogs  = filtered.filter(l => (l["Worker Name"] || "Unknown") === wName);
+          const catMap = {};
+          wLogs.forEach(log => {
+            const cat = log["Category"] || "Uncategorized";
+            if (!catMap[cat]) catMap[cat] = 0;
+            catMap[cat] += parseDuration(log["Duration (hrs)"]);
           });
 
-        const totalPay  = hasAnyPay ? totalPaySum : null;
-        const theadHTML = `<tr><th>Worker</th><th>Rate</th><th>Hours</th><th>Amount</th></tr>`;
-        const rowsHTML  = rowData.length
-          ? rowData.map(r =>
-              `<tr><td>${esc(r.label)}</td><td>${r.rateLabel}</td><td>${fmtHours(r.hrs)}</td><td>${r.pay !== null ? fmtPay(r.pay) : "—"}</td></tr>`
-            ).join("")
-          : `<tr><td colspan="4" style="color:var(--text3);padding-top:12px;">No entries in this range.</td></tr>`;
-        const tfootHTML = `<tr class="summary-total-row"><td colspan="2"><strong>Total</strong></td><td>${fmtHours(totalHrs)}</td><td>${totalPay !== null ? fmtPay(totalPay) : "—"}</td></tr>`;
+          const wr        = workerRates[wName];
+          const hasPay    = wr && wr.rateAmount > 0;
+          const rateLabel = hasPay
+            ? (wr.rateType === "daily" ? `$${wr.rateAmount.toFixed(2)}/day` : `$${wr.rateAmount.toFixed(2)}/hr`)
+            : "";
+
+          function wPay(hrs) {
+            if (!hasPay) return null;
+            return wr.rateType === "daily" ? (hrs / 8) * wr.rateAmount : hrs * wr.rateAmount;
+          }
+
+          const rows       = Object.entries(catMap).sort((a, b) => b[1] - a[1]).map(([cat, hrs]) => ({ cat, hrs, pay: wPay(hrs) }));
+          const sectionHrs = rows.reduce((s, r) => s + r.hrs, 0);
+          const anyPay     = rows.some(r => r.pay !== null);
+          const sectionPay = anyPay ? rows.reduce((s, r) => s + (r.pay || 0), 0) : null;
+          return { wName, rateLabel, rows, sectionHrs, sectionPay };
+        });
+
+        const totalHrs  = workerSections.reduce((s, w) => s + w.sectionHrs, 0);
+        const hasAnyPay = workerSections.some(w => w.sectionPay !== null);
+        const totalPay  = hasAnyPay ? workerSections.reduce((s, w) => s + (w.sectionPay || 0), 0) : null;
+
+        const theadHTML = `<tr><th>Category</th><th>Hours</th><th>Amount</th></tr>`;
+        let rowsHTML = "";
+        workerSections.forEach(w => {
+          const headerLabel = w.rateLabel ? `${w.wName} — ${w.rateLabel}` : w.wName;
+          rowsHTML += `<tr class="summary-cat-header"><td colspan="3">${esc(headerLabel)}</td></tr>`;
+          w.rows.forEach(r => {
+            rowsHTML += `<tr>
+              <td style="padding-left:14px;">${esc(r.cat)}</td>
+              <td>${fmtHours(r.hrs)}</td>
+              <td>${r.pay !== null ? fmtPay(r.pay) : "—"}</td>
+            </tr>`;
+          });
+          rowsHTML += `<tr class="summary-subtotal">
+            <td>Subtotal — ${esc(w.wName)}</td>
+            <td>${fmtHours(w.sectionHrs)}</td>
+            <td>${w.sectionPay !== null ? fmtPay(w.sectionPay) : "—"}</td>
+          </tr>`;
+        });
+        if (!rowsHTML) rowsHTML = `<tr><td colspan="3" style="color:var(--text3);padding-top:12px;">No entries in this range.</td></tr>`;
+
+        const tfootHTML = `<tr class="summary-total-row">
+          <td><strong>Total</strong></td>
+          <td>${fmtHours(totalHrs)}</td>
+          <td>${totalPay !== null ? fmtPay(totalPay) : "—"}</td>
+        </tr>`;
 
         const metaHTML =
           `<strong style="color:var(--text)">${esc(summaryFor)}</strong><br>` +
@@ -1829,8 +1858,8 @@
         document.getElementById("summary-tfoot").innerHTML = tfootHTML;
 
         lastSummaryData = { summaryFor, selectedProject, fromISO, toISO,
-          groupByWorker: true, groupByCategory: false, rateDesc: "", rowData,
-          sections: null, totalHrs, totalPay };
+          groupByWorker: true, groupByCategory: false, rateDesc: "",
+          rowData: null, sections: null, workerSections, totalHrs, totalPay };
       }
 
       document.getElementById("summary-modal-title").style.display  = "none";
@@ -1849,7 +1878,7 @@
   function printSummary() {
     if (!lastSummaryData) { toast("Generate a report first.", "error"); return; }
     const { summaryFor, selectedProject, fromISO, toISO,
-            groupByWorker, groupByCategory, rateDesc, rowData, sections, totalHrs, totalPay } = lastSummaryData;
+            groupByWorker, groupByCategory, rateDesc, rowData, sections, workerSections, totalHrs, totalPay } = lastSummaryData;
 
     const title = `${summaryFor} · ${formatDateShort(fromISO)} – ${formatDateShort(toISO)}`;
 
@@ -1874,12 +1903,18 @@
       });
       tfootRow = `<tr class="total-row"><td><strong>Total</strong></td><td>${fmtHours(totalHrs)}</td><td>${totalPayStr}</td></tr>`;
     } else {
-      // groupByWorker
-      theadRow = `<tr><th>Worker</th><th>Rate</th><th>Hours</th><th>Amount</th></tr>`;
-      tbodyRows = rowData.map(r =>
-        `<tr><td>${esc(r.label)}</td><td>${r.rateLabel}</td><td>${fmtHours(r.hrs)}</td><td>${r.pay !== null ? fmtPay(r.pay) : "—"}</td></tr>`
-      ).join("");
-      tfootRow = `<tr class="total-row"><td colspan="2"><strong>Total</strong></td><td>${fmtHours(totalHrs)}</td><td>${totalPayStr}</td></tr>`;
+      // groupByWorker — worker headers with category line items + subtotals
+      theadRow = `<tr><th>Category</th><th>Hours</th><th>Amount</th></tr>`;
+      tbodyRows = "";
+      workerSections.forEach(w => {
+        const headerLabel = w.rateLabel ? `${w.wName} — ${w.rateLabel}` : w.wName;
+        tbodyRows += `<tr class="cat-header"><td colspan="3">${esc(headerLabel)}</td></tr>`;
+        w.rows.forEach(r => {
+          tbodyRows += `<tr><td style="padding-left:14px;">${esc(r.cat)}</td><td>${fmtHours(r.hrs)}</td><td>${r.pay !== null ? fmtPay(r.pay) : "—"}</td></tr>`;
+        });
+        tbodyRows += `<tr class="subtotal"><td>Subtotal — ${esc(w.wName)}</td><td>${fmtHours(w.sectionHrs)}</td><td>${w.sectionPay !== null ? fmtPay(w.sectionPay) : "—"}</td></tr>`;
+      });
+      tfootRow = `<tr class="total-row"><td><strong>Total</strong></td><td>${fmtHours(totalHrs)}</td><td>${totalPayStr}</td></tr>`;
     }
 
     const html = `<!DOCTYPE html>
