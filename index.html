@@ -239,6 +239,10 @@
     }
     .radio-btn.active { border-color: var(--orange); color: var(--orange); background: rgba(232,119,58,0.08); }
 
+    /* ── Report selector section labels ── */
+    .selector-section-label { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text3); margin: 14px 0 8px; }
+    .selector-section-label:first-child { margin-top: 0; }
+
     /* ── Rate inputs in profile modal ── */
     .rate-row { display: flex; gap: 10px; }
     .rate-row > div:first-child { flex: 0 0 120px; }
@@ -402,7 +406,7 @@
       <button class="btn btn-secondary btn-filter-clear" style="margin-top:12px;" onclick="clearFilters()">Clear filters</button>
     </div>
 
-    <button class="btn-summary" onclick="openSummaryModal()">📄 Generate Weekly Summary</button>
+    <button class="btn-summary" onclick="openSummaryModal()">📄 Generate Report</button>
 
     <div class="card" style="margin-bottom:8px;">
       <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -499,12 +503,13 @@
   </div>
 </div>
 
-<!-- Weekly summary modal -->
+<!-- Report modal -->
 <div class="modal-bg" id="summary-modal" role="dialog" aria-modal="true">
   <div class="modal modal-scroll">
-    <h2>Weekly Summary</h2>
+    <h2 id="summary-modal-title">Report Details</h2>
 
     <div id="summary-date-selector" class="summary-date-selector">
+      <p class="selector-section-label">Date Range</p>
       <div class="radio-group">
         <div class="radio-btn active" id="summary-opt-current" onclick="setSummaryOption('current')">Current week</div>
         <div class="radio-btn" id="summary-opt-custom" onclick="setSummaryOption('custom')">Custom range</div>
@@ -513,21 +518,30 @@
         <div class="field-row">
           <div>
             <label for="summary-from">From</label>
-            <input type="date" id="summary-from" />
+            <input type="date" id="summary-from" onchange="populateSummaryDropdowns()" />
           </div>
           <div>
             <label for="summary-to">To</label>
-            <input type="date" id="summary-to" />
+            <input type="date" id="summary-to" onchange="populateSummaryDropdowns()" />
           </div>
         </div>
       </div>
+
+      <p class="selector-section-label">Filters</p>
       <div id="summary-worker-wrap" style="display:none;">
         <label for="summary-worker">Worker</label>
-        <select id="summary-worker">
+        <select id="summary-worker" onchange="populateSummaryDropdowns()">
           <option value="">All workers</option>
         </select>
       </div>
-      <button class="btn btn-submit" id="summary-generate-btn" onclick="generateSummary()">Generate</button>
+      <div>
+        <label for="summary-project">Project</label>
+        <select id="summary-project">
+          <option value="">All projects</option>
+        </select>
+      </div>
+
+      <button class="btn btn-submit" id="summary-generate-btn" onclick="generateSummary()" style="margin-top:6px;">Generate</button>
     </div>
 
     <div id="summary-content" style="display:none;">
@@ -547,7 +561,7 @@
         <button class="btn btn-submit" id="summary-print-btn" onclick="printSummary()" style="flex:1;">Print / Save PDF</button>
         <button class="btn btn-secondary" id="summary-close-btn" onclick="closeSummaryModal()" style="flex:1;">Close</button>
       </div>
-      <button onclick="showSummarySelector()" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;margin-top:12px;padding:0;">← Change date range</button>
+      <button onclick="showSummarySelector()" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;margin-top:12px;padding:0;">← Change filters</button>
     </div>
   </div>
 </div>
@@ -1274,6 +1288,7 @@
       workerWrap.style.display = "none";
     }
 
+    populateSummaryDropdowns();
     document.getElementById("summary-modal").classList.add("open");
   }
 
@@ -1282,6 +1297,7 @@
   }
 
   function showSummarySelector() {
+    document.getElementById("summary-modal-title").style.display = "";
     document.getElementById("summary-date-selector").style.display = "";
     document.getElementById("summary-content").style.display = "none";
   }
@@ -1291,6 +1307,43 @@
     document.getElementById("summary-opt-current").classList.toggle("active", opt === "current");
     document.getElementById("summary-opt-custom").classList.toggle("active", opt === "custom");
     document.getElementById("summary-custom-range").style.display = opt === "custom" ? "" : "none";
+    populateSummaryDropdowns();
+  }
+
+  // Populate the project dropdown based on current date range + worker selection
+  function populateSummaryDropdowns() {
+    let fromISO = "", toISO = "";
+    if (summaryOption === "current") {
+      const range = getWeekRange(weekStartDay);
+      fromISO = range.start; toISO = range.end;
+    } else {
+      fromISO = document.getElementById("summary-from").value || "";
+      toISO   = document.getElementById("summary-to").value   || "";
+    }
+
+    const workerSel      = document.getElementById("summary-worker");
+    const selectedWorker = isAdminMode && workerSel ? (workerSel.value || "") : workerName;
+
+    const projects = [...new Set(
+      allLogs.filter(log => {
+        const d = normalizeDate(log["Date"]);
+        if (fromISO && d < fromISO) return false;
+        if (toISO   && d > toISO)   return false;
+        // Standard users: only their logs
+        if (!isAdminMode && (log["Worker Name"] || "").trim() !== workerName) return false;
+        // Admin with specific worker selected
+        if (isAdminMode && selectedWorker && (log["Worker Name"] || "").trim() !== selectedWorker) return false;
+        return true;
+      })
+      .map(l => l["Project"] || l["Category"] || "")
+      .filter(Boolean)
+    )].sort();
+
+    const projSel = document.getElementById("summary-project");
+    const prev    = projSel.value;
+    projSel.innerHTML = '<option value="">All projects</option>' +
+      projects.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join("");
+    if (prev && projects.includes(prev)) projSel.value = prev;
   }
 
   async function generateSummary() {
@@ -1310,10 +1363,11 @@
       if (fromISO > toISO)    { toast("From date must be before To date.", "error"); return; }
     }
 
-    const selectedWorker = isAdminMode
+    const selectedWorker  = isAdminMode
       ? (document.getElementById("summary-worker").value || "")
       : workerName;
-    const groupByWorker = isAdminMode && selectedWorker === "";
+    const selectedProject = document.getElementById("summary-project").value || "";
+    const groupByWorker   = isAdminMode && selectedWorker === "";
 
     // Fetch per-worker rates from sheet whenever admin is generating a summary
     if (isAdminMode) {
@@ -1323,12 +1377,16 @@
       } catch(e) { workerRates = {}; }
     }
 
-    // Filter logs
+    // Filter logs by date, worker, and project
     const filtered = allLogs.filter(log => {
       const d = normalizeDate(log["Date"]);
       if (d < fromISO || d > toISO) return false;
+      if (!isAdminMode && (log["Worker Name"] || "").trim() !== workerName) return false;
       if (!groupByWorker && selectedWorker) {
         if ((log["Worker Name"] || "").trim() !== selectedWorker) return false;
+      }
+      if (selectedProject) {
+        if ((log["Project"] || log["Category"] || "") !== selectedProject) return false;
       }
       return true;
     });
@@ -1404,6 +1462,7 @@
     }
     const metaHTML =
       `<strong style="color:var(--text)">${esc(summaryFor)}</strong><br>` +
+      (selectedProject ? `<span style="color:var(--text2);font-size:13px;">${esc(selectedProject)}</span><br>` : "") +
       `${formatDateLong(fromISO)} – ${formatDateLong(toISO)}` +
       (groupByWorker ? "" : `<br>Rate: ${rateDesc}`);
 
@@ -1413,11 +1472,12 @@
     document.getElementById("summary-rows").innerHTML  = rowsHTML;
     document.getElementById("summary-total-hrs").textContent = totalHrs.toFixed(2) + "h";
     document.getElementById("summary-total-pay").textContent = totalPay !== null ? fmtPay(totalPay) : "—";
+    document.getElementById("summary-modal-title").style.display = "none";
     document.getElementById("summary-date-selector").style.display = "none";
     document.getElementById("summary-content").style.display = "";
 
     // Cache for print
-    lastSummaryData = { summaryFor, fromISO, toISO, groupByWorker, rateDesc, rowData, totalHrs, totalPay };
+    lastSummaryData = { summaryFor, selectedProject, fromISO, toISO, groupByWorker, rateDesc, rowData, totalHrs, totalPay };
 
     } catch(err) {
       toast("Could not generate summary.", "error");
@@ -1430,10 +1490,11 @@
 
   function printSummary() {
     if (!lastSummaryData) { toast("Generate a summary first.", "error"); return; }
-    const { summaryFor, fromISO, toISO, groupByWorker, rateDesc, rowData, totalHrs, totalPay } = lastSummaryData;
+    const { summaryFor, selectedProject, fromISO, toISO, groupByWorker, rateDesc, rowData, totalHrs, totalPay } = lastSummaryData;
 
     const title = `${summaryFor} · ${formatDateShort(fromISO)} – ${formatDateShort(toISO)}`;
     const metaTxt = summaryFor + "\n" +
+      (selectedProject ? selectedProject + "\n" : "") +
       formatDateLong(fromISO) + " – " + formatDateLong(toISO) +
       (groupByWorker ? "" : "\nRate: " + rateDesc);
 
