@@ -7,6 +7,8 @@ on:
 jobs:
   bump:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     # Prevents infinite loop — GITHUB_TOKEN pushes don't trigger workflows,
     # but this guard ensures safety if the token behaviour ever changes.
     if: github.actor != 'github-actions[bot]'
