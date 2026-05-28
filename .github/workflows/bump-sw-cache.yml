@@ -1,0 +1,33 @@
+name: Bump SW Cache Version
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    # Prevents infinite loop — GITHUB_TOKEN pushes don't trigger workflows,
+    # but this guard ensures safety if the token behaviour ever changes.
+    if: github.actor != 'github-actions[bot]'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Inject commit SHA into sw.js
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          sed -i "s/const CACHE = \"punchcard-[^\"]*\"/const CACHE = \"punchcard-${SHORT_SHA}\"/" sw.js
+          echo "✓ Cache version → punchcard-${SHORT_SHA}"
+          grep 'const CACHE' sw.js
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add sw.js
+          git diff --staged --quiet || git commit -m "chore: bump SW cache version [skip ci]"
+          git push
