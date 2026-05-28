@@ -572,6 +572,12 @@
         </select>
       </div>
       <div>
+        <label for="summary-category">Category</label>
+        <select id="summary-category" onchange="populateSummaryDropdowns()">
+          <option value="">All categories</option>
+        </select>
+      </div>
+      <div>
         <label for="summary-project">Project</label>
         <select id="summary-project">
           <option value="">All projects</option>
@@ -1354,7 +1360,8 @@
     populateSummaryDropdowns();
   }
 
-  // Populate the project dropdown based on current date range + worker selection
+  // Populate category and project dropdowns based on current selections.
+  // Category is independent; Project is filtered by the selected category.
   function populateSummaryDropdowns() {
     let fromISO = "", toISO = "";
     if (summaryOption === "current") {
@@ -1368,26 +1375,37 @@
     const workerSel      = document.getElementById("summary-worker");
     const selectedWorker = isAdminMode && workerSel ? (workerSel.value || "") : workerName;
 
-    const projects = [...new Set(
-      allLogs.filter(log => {
-        const d = normalizeDate(log["Date"]);
-        if (fromISO && d < fromISO) return false;
-        if (toISO   && d > toISO)   return false;
-        // Standard users: only their logs
-        if (!isAdminMode && (log["Worker Name"] || "").trim() !== workerName) return false;
-        // Admin with specific worker selected
-        if (isAdminMode && selectedWorker && (log["Worker Name"] || "").trim() !== selectedWorker) return false;
-        return true;
-      })
-      .map(l => l["Project"] || l["Category"] || "")
-      .filter(Boolean)
-    )].sort();
+    // Base filter: date range + permissions + worker
+    const base = allLogs.filter(log => {
+      const d = normalizeDate(log["Date"]);
+      if (fromISO && d < fromISO) return false;
+      if (toISO   && d > toISO)   return false;
+      if (!isAdminMode && (log["Worker Name"] || "").trim() !== workerName) return false;
+      if (isAdminMode && selectedWorker && (log["Worker Name"] || "").trim() !== selectedWorker) return false;
+      return true;
+    });
 
-    const projSel = document.getElementById("summary-project");
-    const prev    = projSel.value;
+    // Categories — not filtered by project (broad grouping comes first)
+    const categories = [...new Set(base.map(l => l["Category"] || "").filter(Boolean))].sort();
+    const catSel  = document.getElementById("summary-category");
+    const prevCat = catSel.value;
+    catSel.innerHTML = '<option value="">All categories</option>' +
+      categories.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
+    if (prevCat && categories.includes(prevCat)) catSel.value = prevCat;
+
+    // Projects — filtered by selected category so the list stays relevant
+    const currCategory = catSel.value;
+    const projects = [...new Set(
+      base
+        .filter(l => !currCategory || (l["Category"] || "") === currCategory)
+        .map(l => l["Project"] || l["Category"] || "")
+        .filter(Boolean)
+    )].sort();
+    const projSel  = document.getElementById("summary-project");
+    const prevProj = projSel.value;
     projSel.innerHTML = '<option value="">All projects</option>' +
       projects.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join("");
-    if (prev && projects.includes(prev)) projSel.value = prev;
+    if (prevProj && projects.includes(prevProj)) projSel.value = prevProj;
   }
 
   async function generateSummary() {
@@ -1407,11 +1425,12 @@
       if (fromISO > toISO)    { toast("From date must be before To date.", "error"); return; }
     }
 
-    const selectedWorker  = isAdminMode
+    const selectedWorker   = isAdminMode
       ? (document.getElementById("summary-worker").value || "")
       : workerName;
-    const selectedProject = document.getElementById("summary-project").value || "";
-    const groupByWorker   = isAdminMode && selectedWorker === "";
+    const selectedCategory = document.getElementById("summary-category").value || "";
+    const selectedProject  = document.getElementById("summary-project").value || "";
+    const groupByWorker    = isAdminMode && selectedWorker === "";
 
     // Fetch per-worker rates from sheet whenever admin is generating a summary
     if (isAdminMode) {
@@ -1428,6 +1447,9 @@
       if (!isAdminMode && (log["Worker Name"] || "").trim() !== workerName) return false;
       if (!groupByWorker && selectedWorker) {
         if ((log["Worker Name"] || "").trim() !== selectedWorker) return false;
+      }
+      if (selectedCategory) {
+        if ((log["Category"] || "") !== selectedCategory) return false;
       }
       if (selectedProject) {
         if ((log["Project"] || log["Category"] || "") !== selectedProject) return false;
@@ -1506,7 +1528,8 @@
     }
     const metaHTML =
       `<strong style="color:var(--text)">${esc(summaryFor)}</strong><br>` +
-      (selectedProject ? `<span style="color:var(--text2);font-size:13px;">${esc(selectedProject)}</span><br>` : "") +
+      (selectedCategory ? `<span style="color:var(--text2);font-size:13px;">${esc(selectedCategory)}</span><br>` : "") +
+      (selectedProject  ? `<span style="color:var(--text2);font-size:13px;">${esc(selectedProject)}</span><br>`  : "") +
       `${formatDateLong(fromISO)} – ${formatDateLong(toISO)}` +
       (groupByWorker ? "" : `<br>Rate: ${rateDesc}`);
 
@@ -1521,7 +1544,7 @@
     document.getElementById("summary-content").style.display = "";
 
     // Cache for print
-    lastSummaryData = { summaryFor, selectedProject, fromISO, toISO, groupByWorker, rateDesc, rowData, totalHrs, totalPay };
+    lastSummaryData = { summaryFor, selectedCategory, selectedProject, fromISO, toISO, groupByWorker, rateDesc, rowData, totalHrs, totalPay };
 
     } catch(err) {
       toast("Could not generate summary.", "error");
@@ -1534,11 +1557,12 @@
 
   function printSummary() {
     if (!lastSummaryData) { toast("Generate a summary first.", "error"); return; }
-    const { summaryFor, selectedProject, fromISO, toISO, groupByWorker, rateDesc, rowData, totalHrs, totalPay } = lastSummaryData;
+    const { summaryFor, selectedCategory, selectedProject, fromISO, toISO, groupByWorker, rateDesc, rowData, totalHrs, totalPay } = lastSummaryData;
 
     const title = `${summaryFor} · ${formatDateShort(fromISO)} – ${formatDateShort(toISO)}`;
     const metaTxt = summaryFor + "\n" +
-      (selectedProject ? selectedProject + "\n" : "") +
+      (selectedCategory ? selectedCategory + "\n" : "") +
+      (selectedProject  ? selectedProject  + "\n" : "") +
       formatDateLong(fromISO) + " – " + formatDateLong(toISO) +
       (groupByWorker ? "" : "\nRate: " + rateDesc);
 
