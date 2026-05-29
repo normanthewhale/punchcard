@@ -659,6 +659,7 @@
 
     initTheme();
     updateWorkerDisplay();
+    toggleCurrentWeek(); // default to current week on startup
     if (!workerName) setTimeout(openWorkerModal, 600);
 
     fetchProjects();
