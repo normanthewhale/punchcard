@@ -310,88 +310,23 @@
     }
     .btn-summary:hover { background: rgba(232,119,58,0.08); }
 
-    /* ── Summary modal content ── */
-    .summary-header { margin-bottom: 20px; }
-    .summary-meta { font-size: 13px; color: var(--text2); line-height: 1.7; }
-    .summary-table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
-    .summary-table th {
-      font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase;
-      color: var(--text3); text-align: left; padding: 0 0 8px; border-bottom: 1px solid var(--border);
+    /* ── Current Week toggle ── */
+    .week-toggle {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 12px; border: 1px solid var(--border); border-radius: 20px;
+      background: var(--bg3); color: var(--text2); font-size: 13px; font-weight: 500;
+      cursor: pointer; transition: all .15s; white-space: nowrap; margin-bottom: 8px;
     }
-    .summary-table th:last-child, .summary-table td:last-child { text-align: right; }
-    .summary-table td {
-      font-size: 14px; padding: 10px 0; border-bottom: 1px solid var(--border);
-      color: var(--text); vertical-align: top;
+    .week-toggle.active {
+      border-color: var(--orange); color: var(--orange);
+      background: rgba(232,119,58,0.10);
     }
-    .summary-table td:nth-child(2), .summary-table th:nth-child(2) { text-align: right; padding-right: 16px; }
-    /* Category group header row */
-    .summary-cat-header td {
-      font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-      color: var(--orange); padding: 14px 0 4px; border-bottom: none;
-      text-align: left !important;
-    }
-    /* Per-category subtotal row */
-    .summary-subtotal td {
-      font-size: 13px; font-weight: 600; color: var(--text2);
-      background: var(--bg3); padding: 7px 6px; border-bottom: 1px solid var(--border);
-    }
-    .summary-subtotal td:first-child { padding-left: 10px; border-radius: 4px 0 0 4px; }
-    .summary-subtotal td:last-child  { border-radius: 0 4px 4px 0; color: var(--green); }
-    /* Grand total row (tfoot) */
-    .summary-total-row td {
-      font-size: 15px; font-weight: 700; padding-top: 14px;
-      border-top: 2px solid var(--border); border-bottom: none;
-    }
-    .summary-total-row td:last-child { color: var(--green); }
-
-    .summary-date-selector { margin-bottom: 20px; }
-    .radio-group { display: flex; gap: 10px; margin-bottom: 14px; }
-    .radio-btn {
-      flex: 1; padding: 10px; border: 1px solid var(--border); border-radius: 10px;
-      background: var(--bg3); color: var(--text2); font-size: 14px; font-weight: 500;
-      cursor: pointer; text-align: center; transition: all .15s;
-    }
-    .radio-btn.active { border-color: var(--orange); color: var(--orange); background: rgba(232,119,58,0.08); }
-
-    /* ── Report selector section labels ── */
-    .selector-section-label { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text3); margin: 14px 0 8px; }
-    .selector-section-label:first-child { margin-top: 0; }
-
-    /* ── Report category checkbox list ── */
-    .cat-check-list {
-      background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
-      max-height: 180px; overflow-y: auto; margin-bottom: 16px;
-    }
-    .cat-check-item {
-      display: flex; align-items: center; gap: 10px;
-      padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer;
-      user-select: none;
-    }
-    .cat-check-item:last-child { border-bottom: none; }
-    .cat-check-item input[type="checkbox"] {
-      width: 16px; height: 16px; flex-shrink: 0; cursor: pointer;
-      accent-color: var(--orange); margin: 0;
-    }
-    .cat-check-item span { font-size: 14px; color: var(--text); line-height: 1.3; }
-    .cat-check-item.all-item { border-bottom: 2px solid var(--border); }
-    .cat-check-item.all-item span { font-weight: 600; color: var(--text2); }
 
     /* ── Rate inputs in profile modal ── */
     .rate-row { display: flex; gap: 10px; }
     .rate-row > div:first-child { flex: 0 0 120px; }
     .rate-row > div:last-child { flex: 1; }
 
-    /* ── Print styles ── */
-    @media print {
-      body { background: #fff !important; color: #000 !important; }
-      #app, header, nav, #screen-clock, .filter-bar, .stats-grid,
-      .btn-summary, .modal-bg:not(#summary-modal) { display: none !important; }
-      #summary-modal { display: block !important; position: static !important; background: none !important; }
-      #summary-modal .modal { border: none !important; background: #fff !important; color: #000 !important; box-shadow: none !important; border-radius: 0 !important; padding: 0 !important; }
-      .summary-table th, .summary-table td { color: #000 !important; border-color: #ccc !important; }
-      .summary-meta { color: #555 !important; }
-      #summary-print-btn, #summary-close-btn, #summary-date-selector { display: none !important; }
-    }
   </style>
 </head>
 <body>
@@ -518,7 +453,7 @@
     </div>
 
     <!-- Generate Report (above filters) -->
-    <button class="btn-summary" onclick="openSummaryModal()">📄 Generate Report</button>
+    <button class="btn-summary" id="btn-generate-report" onclick="generateSummary()">📄 Generate Report</button>
 
     <!-- Filters (collapsible) -->
     <div class="filter-bar">
@@ -532,11 +467,12 @@
         <div class="filter-row" style="margin-top:12px;">
           <div>
             <label>From</label>
-            <input type="date" id="filter-from" onchange="applyFilters()" />
+            <button id="week-toggle-btn" class="week-toggle" onclick="toggleCurrentWeek()">📅 Current week</button>
+            <input type="date" id="filter-from" onchange="onFilterDateChange()" />
           </div>
           <div>
             <label>To</label>
-            <input type="date" id="filter-to" onchange="applyFilters()" />
+            <input type="date" id="filter-to" onchange="onFilterDateChange()" />
           </div>
           <div>
             <label>Category</label>
@@ -669,68 +605,6 @@
   </div>
 </div>
 
-<!-- Report modal -->
-<div class="modal-bg" id="summary-modal" role="dialog" aria-modal="true">
-  <div class="modal modal-scroll">
-    <h2 id="summary-modal-title">Report Details</h2>
-
-    <div id="summary-date-selector" class="summary-date-selector">
-      <p class="selector-section-label">Date Range</p>
-      <div class="radio-group">
-        <div class="radio-btn active" id="summary-opt-current" onclick="setSummaryOption('current')">Current week</div>
-        <div class="radio-btn" id="summary-opt-custom" onclick="setSummaryOption('custom')">Custom range</div>
-      </div>
-      <div id="summary-custom-range" style="display:none;">
-        <div class="field-row">
-          <div>
-            <label for="summary-from">From</label>
-            <input type="date" id="summary-from" onchange="populateSummaryDropdowns()" />
-          </div>
-          <div>
-            <label for="summary-to">To</label>
-            <input type="date" id="summary-to" onchange="populateSummaryDropdowns()" />
-          </div>
-        </div>
-      </div>
-
-      <p class="selector-section-label">Filters</p>
-      <div id="summary-worker-wrap" style="display:none;">
-        <label for="summary-worker">Worker</label>
-        <select id="summary-worker" onchange="populateSummaryDropdowns()">
-          <option value="">All workers</option>
-        </select>
-      </div>
-      <div>
-        <label>Categories</label>
-        <div id="summary-category-list" class="cat-check-list"></div>
-      </div>
-      <div>
-        <label for="summary-project">Project</label>
-        <select id="summary-project">
-          <option value="">All projects</option>
-        </select>
-      </div>
-
-      <button class="btn btn-submit" id="summary-generate-btn" onclick="generateSummary()" style="margin-top:6px;">Generate</button>
-    </div>
-
-    <div id="summary-content" style="display:none;">
-      <div class="summary-header">
-        <div class="summary-meta" id="summary-meta"></div>
-      </div>
-      <table class="summary-table" id="summary-table">
-        <thead id="summary-thead"></thead>
-        <tbody id="summary-rows"></tbody>
-        <tfoot id="summary-tfoot"></tfoot>
-      </table>
-      <div style="display:flex; gap:10px; margin-top:20px;">
-        <button class="btn btn-submit" id="summary-print-btn" onclick="printSummary()" style="flex:1;">Print / Save PDF</button>
-        <button class="btn btn-secondary" id="summary-close-btn" onclick="closeSummaryModal()" style="flex:1;">Close</button>
-      </div>
-      <button onclick="showSummarySelector()" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;margin-top:12px;padding:0;">← Change filters</button>
-    </div>
-  </div>
-</div>
 
 <div id="toast" role="alert" aria-live="assertive"></div>
 
@@ -763,11 +637,11 @@
   let weekStartDay = parseInt(localStorage.getItem("ft_week_start_day") || "1", 10);
 
   // ── Summary / report state ────────────────────────────────────────────────
-  let workerRates              = {};
-  let lastSummaryData          = null;
-  let selectedReportCategories  = []; // specific cats chosen by user
-  let allCategoriesSelected     = false; // true when "All" checkbox is checked
-  let reportAvailableCategories = [];
+  let workerRates     = {};
+  let lastSummaryData = null;
+
+  // ── Filter state ──────────────────────────────────────────────────────────
+  let filterCurrentWeek = false;
 
   // ── Pagination state ──────────────────────────────────────────────────────
   let filteredLogs = [];
@@ -1211,9 +1085,46 @@
     renderHistory();
   }
 
+  function toggleCurrentWeek() {
+    filterCurrentWeek = !filterCurrentWeek;
+    const btn  = document.getElementById("week-toggle-btn");
+    const from = document.getElementById("filter-from");
+    const to   = document.getElementById("filter-to");
+    if (filterCurrentWeek) {
+      const { start, end } = getWeekRange(weekStartDay);
+      from.value    = start;
+      to.value      = end;
+      from.disabled = true;
+      to.disabled   = true;
+      btn.classList.add("active");
+    } else {
+      from.disabled = false;
+      to.disabled   = false;
+      btn.classList.remove("active");
+    }
+    applyFilters();
+  }
+
+  function onFilterDateChange() {
+    // If user edits a date manually, deactivate the Current Week toggle
+    if (filterCurrentWeek) {
+      filterCurrentWeek = false;
+      document.getElementById("filter-from").disabled = false;
+      document.getElementById("filter-to").disabled   = false;
+      document.getElementById("week-toggle-btn").classList.remove("active");
+    }
+    applyFilters();
+  }
+
   function clearFilters() {
-    document.getElementById("filter-from").value     = "";
-    document.getElementById("filter-to").value       = "";
+    filterCurrentWeek = false;
+    const from = document.getElementById("filter-from");
+    const to   = document.getElementById("filter-to");
+    from.disabled = false;
+    to.disabled   = false;
+    document.getElementById("week-toggle-btn").classList.remove("active");
+    from.value = "";
+    to.value   = "";
     document.getElementById("filter-project").value  = "";
     document.getElementById("filter-category").value = "";
     document.getElementById("filter-sort").value     = "newest";
@@ -1530,196 +1441,26 @@
     return String(h).padStart(2, "0") + ":" + min;
   }
 
-  // ── Report modal ──────────────────────────────────────────────────────────
-  let summaryOption = "current";
-
-  function openSummaryModal() {
-    showSummarySelector();
-    const { start, end } = getWeekRange(weekStartDay);
-    document.getElementById("summary-from").value = start;
-    document.getElementById("summary-to").value   = end;
-
-    // Admin: populate worker selector, pre-fill from active filter
-    const workerWrap = document.getElementById("summary-worker-wrap");
-    if (isAdminMode) {
-      const names = [...new Set(allLogs.map(l => l["Worker Name"]).filter(Boolean))].sort();
-      const sel   = document.getElementById("summary-worker");
-      sel.innerHTML = '<option value="">All workers</option>' +
-        names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
-      workerWrap.style.display = "";
-      const activeWorker = document.getElementById("filter-worker").value;
-      if (activeWorker) sel.value = activeWorker;
-    } else {
-      workerWrap.style.display = "none";
-    }
-
-    // Pre-fill category from active filter (or start with nothing selected)
-    const activeCat = document.getElementById("filter-category").value;
-    selectedReportCategories = activeCat ? [activeCat] : [];
-    allCategoriesSelected = false;
-
-    populateSummaryDropdowns();
-
-    // Pre-fill project from active filter (after dropdowns are built)
-    const activeProject = document.getElementById("filter-project").value;
-    if (activeProject) {
-      const projSel = document.getElementById("summary-project");
-      if ([...projSel.options].some(o => o.value === activeProject)) {
-        projSel.value = activeProject;
-      }
-    }
-
-    document.getElementById("summary-modal").classList.add("open");
-  }
-
-  function closeSummaryModal() {
-    document.getElementById("summary-modal").classList.remove("open");
-  }
-
-  function showSummarySelector() {
-    document.getElementById("summary-modal-title").style.display = "";
-    document.getElementById("summary-date-selector").style.display = "";
-    document.getElementById("summary-content").style.display = "none";
-  }
-
-  function setSummaryOption(opt) {
-    summaryOption = opt;
-    document.getElementById("summary-opt-current").classList.toggle("active", opt === "current");
-    document.getElementById("summary-opt-custom").classList.toggle("active",  opt === "custom");
-    document.getElementById("summary-custom-range").style.display = opt === "custom" ? "" : "none";
-    populateSummaryDropdowns();
-  }
-
-  // ── Report category checkbox list ────────────────────────────────────────
-  function renderReportCategoryList(categories) {
-    reportAvailableCategories = categories;
-    const list = document.getElementById("summary-category-list");
-    const someSel = !allCategoriesSelected && selectedReportCategories.length > 0;
-    const indeterminate = someSel && selectedReportCategories.length < categories.length;
-
-    list.innerHTML =
-      `<label class="cat-check-item all-item">
-        <input type="checkbox" id="cat-check-all" ${allCategoriesSelected ? "checked" : ""} />
-        <span>All categories</span>
-      </label>` +
-      categories.map(c =>
-        `<label class="cat-check-item">
-          <input type="checkbox" data-cat="${esc(c)}" ${allCategoriesSelected || selectedReportCategories.includes(c) ? "checked" : ""} />
-          <span>${esc(c)}</span>
-        </label>`
-      ).join("");
-
-    // Show indeterminate state on "All" when only some are checked
-    const allCb = list.querySelector("#cat-check-all");
-    allCb.indeterminate = indeterminate;
-
-    allCb.addEventListener("change", () => {
-      allCategoriesSelected     = allCb.checked;
-      selectedReportCategories  = [];
-      renderReportCategoryList(reportAvailableCategories);
-      populateSummaryDropdowns();
-    });
-
-    list.querySelectorAll("input[data-cat]").forEach(cb => {
-      cb.addEventListener("change", () => {
-        const cat = cb.dataset.cat;
-        if (cb.checked) {
-          // Checking an individual box turns off "All"
-          allCategoriesSelected = false;
-          if (!selectedReportCategories.includes(cat)) selectedReportCategories.push(cat);
-          // If every individual box is now checked → treat as "All"
-          if (selectedReportCategories.length === reportAvailableCategories.length) {
-            allCategoriesSelected    = true;
-            selectedReportCategories = [];
-          }
-        } else {
-          // Unchecking: if "All" was active, expand to full list first
-          if (allCategoriesSelected) {
-            allCategoriesSelected    = false;
-            selectedReportCategories = [...reportAvailableCategories];
-          }
-          selectedReportCategories = selectedReportCategories.filter(c => c !== cat);
-        }
-        renderReportCategoryList(reportAvailableCategories);
-        populateSummaryDropdowns();
-      });
-    });
-  }
-
-  function populateSummaryDropdowns() {
-    let fromISO = "", toISO = "";
-    if (summaryOption === "current") {
-      const range = getWeekRange(weekStartDay);
-      fromISO = range.start; toISO = range.end;
-    } else {
-      fromISO = document.getElementById("summary-from").value || "";
-      toISO   = document.getElementById("summary-to").value   || "";
-    }
-
-    const workerSel      = document.getElementById("summary-worker");
-    const selectedWorker = isAdminMode && workerSel ? (workerSel.value || "") : workerName;
-
-    const base = allLogs.filter(log => {
-      const d = normalizeDate(log["Date"]);
-      if (fromISO && d < fromISO) return false;
-      if (toISO   && d > toISO)   return false;
-      if (!isAdminMode && (log["Worker Name"] || "").trim() !== workerName) return false;
-      if (isAdminMode && selectedWorker && (log["Worker Name"] || "").trim() !== selectedWorker) return false;
-      return true;
-    });
-
-    // Categories
-    const categories = [...new Set(base.map(l => l["Category"] || "").filter(Boolean))].sort();
-    // Remove any selected categories that no longer exist in the data
-    selectedReportCategories = selectedReportCategories.filter(c => categories.includes(c));
-    // If "All" was selected but categories shrunk, keep allCategoriesSelected as-is
-    renderReportCategoryList(categories);
-
-    // Projects filtered by selected categories
-    const projects = [...new Set(
-      base
-        .filter(l => allCategoriesSelected || selectedReportCategories.length === 0 || selectedReportCategories.includes(l["Category"] || ""))
-        .map(l => l["Project"] || l["Category"] || "")
-        .filter(Boolean)
-    )].sort();
-
-    const projSel  = document.getElementById("summary-project");
-    const prevProj = projSel.value;
-    projSel.innerHTML = '<option value="">All projects</option>' +
-      projects.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join("");
-    if (prevProj && projects.includes(prevProj)) projSel.value = prevProj;
-  }
+  // ── Report generation ─────────────────────────────────────────────────────
 
   async function generateSummary() {
-    const genBtn = document.getElementById("summary-generate-btn");
+    const genBtn = document.getElementById("btn-generate-report");
     genBtn.disabled = true;
-    genBtn.innerHTML = `<span class="spinner" style="vertical-align:middle; margin-right:8px;"></span>Loading…`;
+    genBtn.innerHTML = `<span class="spinner" style="vertical-align:middle; margin-right:8px;"></span>Generating…`;
 
     try {
-      let fromISO, toISO;
-      if (summaryOption === "current") {
-        const range = getWeekRange(weekStartDay);
-        fromISO = range.start; toISO = range.end;
-      } else {
-        fromISO = document.getElementById("summary-from").value;
-        toISO   = document.getElementById("summary-to").value;
-        if (!fromISO || !toISO) { toast("Select a date range.", "error"); return; }
-        if (fromISO > toISO)    { toast("From date must be before To date.", "error"); return; }
-      }
+      // Read date range from the filter bar (Current Week toggle fills them automatically)
+      const fromISO = document.getElementById("filter-from").value;
+      const toISO   = document.getElementById("filter-to").value;
+      if (!fromISO || !toISO) { toast("Set a date range in the filters first.", "error"); return; }
+      if (fromISO > toISO)    { toast("'From' date must be before 'To'.", "error"); return; }
 
-      const selectedWorker  = isAdminMode
-        ? (document.getElementById("summary-worker").value || "")
-        : workerName;
-      const selectedProject = document.getElementById("summary-project").value || "";
-      const groupByWorker   = isAdminMode && selectedWorker === "";
-      // Always group by category for non-worker reports
-      const groupByCategory = !groupByWorker;
-
-      // Require at least one category to be selected
-      if (!allCategoriesSelected && selectedReportCategories.length === 0) {
-        toast("Please select at least one category.", "error");
-        return;
-      }
+      const selectedWorker   = isAdminMode ? (document.getElementById("filter-worker").value || "") : workerName;
+      const selectedProject  = document.getElementById("filter-project").value || "";
+      const selectedCategory = document.getElementById("filter-category").value || "";
+      const groupByWorker    = isAdminMode && selectedWorker === "";
+      const groupByCategory  = !groupByWorker;
+      const summaryFor       = groupByWorker ? "All workers" : (selectedWorker || workerName || "—");
 
       if (isAdminMode) {
         try {
@@ -1728,18 +1469,16 @@
         } catch(e) { workerRates = {}; }
       }
 
-      // Filter logs
+      // Filter logs using the same criteria as the filter bar
       const filtered = allLogs.filter(log => {
         const d = normalizeDate(log["Date"]);
         if (d < fromISO || d > toISO) return false;
         if (!isAdminMode && (log["Worker Name"] || "").trim() !== workerName) return false;
         if (!groupByWorker && selectedWorker && (log["Worker Name"] || "").trim() !== selectedWorker) return false;
-        if (!allCategoriesSelected && selectedReportCategories.length > 0 && !selectedReportCategories.includes(log["Category"] || "")) return false;
+        if (selectedCategory && (log["Category"] || "") !== selectedCategory) return false;
         if (selectedProject && (log["Project"] || log["Category"] || "") !== selectedProject) return false;
         return true;
       });
-
-      const summaryFor = groupByWorker ? "All workers" : (selectedWorker || workerName || "—");
 
       // Helper: compute pay for a given hrs value in the current report context
       function payForContext(hrs) {
@@ -1753,11 +1492,10 @@
 
       // ── Category-grouped report (standard user or admin viewing specific worker) ─
       if (groupByCategory) {
-        // Determine which categories to group by:
-        // explicit selection → use those; "all" (empty array) → derive from filtered logs
-        const catsToGroup = allCategoriesSelected
-          ? [...new Set(filtered.map(l => l["Category"] || "").filter(Boolean))].sort()
-          : selectedReportCategories;
+        // Specific category selected → one section; otherwise group all from filtered logs
+        const catsToGroup = selectedCategory
+          ? [selectedCategory]
+          : [...new Set(filtered.map(l => l["Category"] || "").filter(Boolean))].sort();
 
         const sections = catsToGroup.map(cat => {
           const catLogs = filtered.filter(l => (l["Category"] || "") === cat);
@@ -1793,41 +1531,7 @@
             : "—";
         }
 
-        const theadHTML = `<tr><th>Project</th><th>Hours</th><th>Amount</th></tr>`;
-        let rowsHTML = "";
-        sections.forEach(sec => {
-          rowsHTML += `<tr class="summary-cat-header"><td colspan="3">${esc(sec.cat)}</td></tr>`;
-          sec.rows.forEach(r => {
-            rowsHTML += `<tr>
-              <td style="padding-left:14px;">${esc(r.proj)}</td>
-              <td>${fmtHours(r.hrs)}</td>
-              <td>${r.pay !== null ? fmtPay(r.pay) : "—"}</td>
-            </tr>`;
-          });
-          rowsHTML += `<tr class="summary-subtotal">
-            <td>Subtotal — ${esc(sec.cat)}</td>
-            <td>${fmtHours(sec.catHrs)}</td>
-            <td>${sec.catPay !== null ? fmtPay(sec.catPay) : "—"}</td>
-          </tr>`;
-        });
-        if (!rowsHTML) rowsHTML = `<tr><td colspan="3" style="color:var(--text3);padding-top:12px;">No entries in this range.</td></tr>`;
-
-        const tfootHTML = `<tr class="summary-total-row">
-          <td><strong>Total</strong></td>
-          <td>${fmtHours(totalHrs)}</td>
-          <td>${totalPay !== null ? fmtPay(totalPay) : "—"}</td>
-        </tr>`;
-
-        const metaHTML =
-          `<strong style="color:var(--text)">${esc(summaryFor)}</strong><br>` +
-          (selectedProject ? `<span style="color:var(--text2)">${esc(selectedProject)}</span><br>` : "") +
-          `${formatDateLong(fromISO)} – ${formatDateLong(toISO)}<br>` +
-          `Rate: ${rateDesc}`;
-
-        document.getElementById("summary-thead").innerHTML = theadHTML;
-        document.getElementById("summary-meta").innerHTML  = metaHTML;
-        document.getElementById("summary-rows").innerHTML  = rowsHTML;
-        document.getElementById("summary-tfoot").innerHTML = tfootHTML;
+        if (sections.length === 0) { toast("No entries in this range.", "error"); return; }
 
         lastSummaryData = { summaryFor, selectedProject, fromISO, toISO,
           groupByWorker: false, groupByCategory: true, rateDesc, rowData: null,
@@ -1869,57 +1573,21 @@
         const hasAnyPay = workerSections.some(w => w.sectionPay !== null);
         const totalPay  = hasAnyPay ? workerSections.reduce((s, w) => s + (w.sectionPay || 0), 0) : null;
 
-        const theadHTML = `<tr><th>Category</th><th>Hours</th><th>Amount</th></tr>`;
-        let rowsHTML = "";
-        workerSections.forEach(w => {
-          const headerLabel = w.rateLabel ? `${w.wName} — ${w.rateLabel}` : w.wName;
-          rowsHTML += `<tr class="summary-cat-header"><td colspan="3">${esc(headerLabel)}</td></tr>`;
-          w.rows.forEach(r => {
-            rowsHTML += `<tr>
-              <td style="padding-left:14px;">${esc(r.cat)}</td>
-              <td>${fmtHours(r.hrs)}</td>
-              <td>${r.pay !== null ? fmtPay(r.pay) : "—"}</td>
-            </tr>`;
-          });
-          rowsHTML += `<tr class="summary-subtotal">
-            <td>Subtotal — ${esc(w.wName)}</td>
-            <td>${fmtHours(w.sectionHrs)}</td>
-            <td>${w.sectionPay !== null ? fmtPay(w.sectionPay) : "—"}</td>
-          </tr>`;
-        });
-        if (!rowsHTML) rowsHTML = `<tr><td colspan="3" style="color:var(--text3);padding-top:12px;">No entries in this range.</td></tr>`;
-
-        const tfootHTML = `<tr class="summary-total-row">
-          <td><strong>Total</strong></td>
-          <td>${fmtHours(totalHrs)}</td>
-          <td>${totalPay !== null ? fmtPay(totalPay) : "—"}</td>
-        </tr>`;
-
-        const metaHTML =
-          `<strong style="color:var(--text)">${esc(summaryFor)}</strong><br>` +
-          (selectedProject ? `<span style="color:var(--text2)">${esc(selectedProject)}</span><br>` : "") +
-          `${formatDateLong(fromISO)} – ${formatDateLong(toISO)}`;
-
-        document.getElementById("summary-thead").innerHTML = theadHTML;
-        document.getElementById("summary-meta").innerHTML  = metaHTML;
-        document.getElementById("summary-rows").innerHTML  = rowsHTML;
-        document.getElementById("summary-tfoot").innerHTML = tfootHTML;
+        if (workerSections.length === 0) { toast("No entries in this range.", "error"); return; }
 
         lastSummaryData = { summaryFor, selectedProject, fromISO, toISO,
           groupByWorker: true, groupByCategory: false, rateDesc: "",
           rowData: null, sections: null, workerSections, totalHrs, totalPay };
       }
 
-      document.getElementById("summary-modal-title").style.display  = "none";
-      document.getElementById("summary-date-selector").style.display = "none";
-      document.getElementById("summary-content").style.display       = "";
+      printSummary();
 
     } catch(err) {
       toast("Could not generate report.", "error");
       console.error("generateSummary error:", err);
     } finally {
-      genBtn.disabled    = false;
-      genBtn.textContent = "Generate";
+      genBtn.disabled   = false;
+      genBtn.innerHTML  = "📄 Generate Report";
     }
   }
 
@@ -2011,10 +1679,6 @@
   document.getElementById("edit-modal").addEventListener("click", function(e) {
     if (e.target === this) closeEditModal();
   });
-  document.getElementById("summary-modal").addEventListener("click", function(e) {
-    if (e.target === this) closeSummaryModal();
-  });
-
   document.getElementById("worker-input").addEventListener("keydown", e => {
     if (e.key === "Enter") saveWorkerName();
   });
