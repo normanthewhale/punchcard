@@ -1045,10 +1045,26 @@
   function updateAdminUI() {
     document.getElementById("filter-worker-wrap").style.display = isAdminMode ? "" : "none";
     if (isAdminMode) {
-      const names = [...new Set(allLogs.map(l => l["Worker Name"]).filter(Boolean))].sort();
-      const sel   = document.getElementById("filter-worker");
-      sel.innerHTML = '<option value="">All workers</option>' +
-        names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+      // Fetch worker list from Workers sheet so new workers appear even before they log time
+      apiFetch({ action: "getWorkers", adminCode })
+        .then(res => {
+          const sheetNames = res.workers || [];
+          // Also include any names found in log history (catch anyone not yet in Workers sheet)
+          const logNames   = allLogs.map(l => l["Worker Name"]).filter(Boolean);
+          const names      = [...new Set([...sheetNames, ...logNames])].sort();
+          const sel        = document.getElementById("filter-worker");
+          const prev       = sel.value;
+          sel.innerHTML    = '<option value="">All workers</option>' +
+            names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+          if (prev && names.includes(prev)) sel.value = prev;
+        })
+        .catch(() => {
+          // Fallback: derive from loaded logs
+          const names = [...new Set(allLogs.map(l => l["Worker Name"]).filter(Boolean))].sort();
+          const sel   = document.getElementById("filter-worker");
+          sel.innerHTML = '<option value="">All workers</option>' +
+            names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+        });
     }
   }
 

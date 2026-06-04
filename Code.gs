@@ -27,6 +27,7 @@ function handleRequest(e) {
     else if (action === "editLog")        output = editLog(params);
     else if (action === "saveWorkerRate") output = saveWorkerRate(params);
     else if (action === "getWorkerRates") output = getWorkerRates(params);
+    else if (action === "getWorkers")     output = getWorkers(params);
     else                                  output = { error: "Unknown action: " + action };
   } catch(err) {
     output = { error: err.toString() };
@@ -195,6 +196,25 @@ function saveWorkerRate(params) {
   }
 
   return { success: true };
+}
+
+// ── Get worker names list (admin only) ───────────────────────────────────────
+function getWorkers(params) {
+  var adminCode  = (params.adminCode || "").toString().trim();
+  var storedCode = PropertiesService.getScriptProperties().getProperty("ADMIN_CODE");
+  if (!storedCode || adminCode !== storedCode) return { error: "Unauthorized" };
+
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_NAME_WORKERS);
+  if (!sheet) return { workers: [] };
+
+  var data    = sheet.getDataRange().getValues();
+  var workers = [];
+  for (var i = 1; i < data.length; i++) {
+    var name = String(data[i][0]).trim();
+    if (name) workers.push(name);
+  }
+  return { workers: workers };
 }
 
 // ── Get all worker rates (admin only) ─────────────────────────────────────────
