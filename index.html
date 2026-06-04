@@ -98,9 +98,16 @@
     .timer-wrap { text-align: center; padding: 12px 0 20px; }
     .timer-clock { font-size: 56px; font-weight: 300; letter-spacing: -2px; color: var(--text); font-variant-numeric: tabular-nums; line-height: 1; }
     .timer-clock.running { color: var(--orange); }
+    .timer-clock.paused  { color: var(--text3); }
     .timer-clock.stopped { color: var(--text2); }
-    .timer-status    { font-size: 13px; color: var(--text2); margin-top: 6px; }
+    .timer-status     { font-size: 13px; color: var(--text2); margin-top: 6px; }
     .timer-started-at { font-size: 12px; color: var(--text3); margin-top: 4px; }
+    .timer-break      { font-size: 12px; color: var(--text3); margin-top: 4px; min-height: 16px; }
+    .btn-pause {
+      background: var(--bg3); color: var(--text2); border: 1px solid var(--border);
+    }
+    .btn-pause:hover  { background: var(--bg2); color: var(--text); }
+    .btn-pause.active { border-color: var(--orange); color: var(--orange); background: rgba(232,119,58,0.08); }
 
     /* ── Buttons ── */
     .btn { display: block; width: 100%; padding: 16px; border: none; border-radius: var(--radius); font-size: 17px; font-weight: 600; cursor: pointer; transition: transform .1s, opacity .2s; letter-spacing: -0.2px; }
@@ -389,8 +396,10 @@
         <div class="timer-clock" id="timer-clock">00:00:00</div>
         <div class="timer-status" id="timer-status">Ready to clock in</div>
         <div class="timer-started-at" id="timer-started-at"></div>
+        <div class="timer-break" id="timer-break"></div>
       </div>
       <button class="btn btn-start" id="btn-start" onclick="startTimer()">Clock In</button>
+      <button class="btn btn-pause" id="btn-pause" onclick="togglePause()" style="display:none; margin-top:10px;">⏸ &nbsp;Pause</button>
       <button class="btn btn-stop"  id="btn-stop"  onclick="stopTimer()" style="display:none; margin-top:10px;">Clock Out</button>
     </div>
 
@@ -624,6 +633,9 @@
   let timerInterval    = null;
   let startTimestamp   = null;
   let endTimestamp     = null;
+  let isPaused         = false;
+  let pauseStart       = null;   // timestamp when current break began
+  let totalPausedMs    = 0;      // accumulated break milliseconds
   let workerName       = localStorage.getItem("ft_worker") || "";
   let adminCode        = localStorage.getItem("ft_admin_code") || "";
   let isAdminMode      = false;
@@ -679,9 +691,19 @@
       const age = Date.now() - ts;
       if (!isNaN(ts) && ts > 0 && age < 16 * 3600 * 1000) {
         startTimestamp = ts;
+        totalPausedMs  = parseInt(localStorage.getItem("ft_timer_total_paused") || "0", 10);
+        const savedPaused     = localStorage.getItem("ft_timer_paused");
+        const savedPauseStart = localStorage.getItem("ft_timer_pause_start");
+        if (savedPaused === "1" && savedPauseStart) {
+          isPaused   = true;
+          pauseStart = parseInt(savedPauseStart, 10);
+        }
         restoreTimer();
       } else {
         localStorage.removeItem("ft_timer_start");
+        localStorage.removeItem("ft_timer_paused");
+        localStorage.removeItem("ft_timer_pause_start");
+        localStorage.removeItem("ft_timer_total_paused");
       }
     }
   });
@@ -846,6 +868,7 @@
   function startTimer() {
     const elStart   = document.getElementById("btn-start");
     const elStop    = document.getElementById("btn-stop");
+    const elPause   = document.getElementById("btn-pause");
     const elSubmit  = document.getElementById("submit-card");
     const elClock   = document.getElementById("timer-clock");
     const elStatus  = document.getElementById("timer-status");
@@ -859,14 +882,25 @@
     if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
 
     startTimestamp = Date.now();
-    localStorage.setItem("ft_timer_start", String(startTimestamp));
+    isPaused       = false;
+    pauseStart     = null;
+    totalPausedMs  = 0;
+
+    localStorage.setItem("ft_timer_start",        String(startTimestamp));
+    localStorage.setItem("ft_timer_total_paused", "0");
+    localStorage.removeItem("ft_timer_paused");
+    localStorage.removeItem("ft_timer_pause_start");
 
     elStart.style.display  = "none";
+    elPause.style.display  = "block";
+    elPause.innerHTML      = "⏸&nbsp; Pause";
+    elPause.classList.remove("active");
     elStop.style.display   = "block";
     elSubmit.style.display = "none";
     elClock.className      = "timer-clock running";
     elStatus.textContent   = "Clocked in";
     elStartAt.textContent  = "Started at " + fmtTime12(new Date(startTimestamp));
+    document.getElementById("timer-break").textContent = "";
 
     tickTimer();
     timerInterval = setInterval(tickTimer, 1000);
@@ -877,6 +911,7 @@
   function restoreTimer() {
     const elStart   = document.getElementById("btn-start");
     const elStop    = document.getElementById("btn-stop");
+    const elPause   = document.getElementById("btn-pause");
     const elClock   = document.getElementById("timer-clock");
     const elStatus  = document.getElementById("timer-status");
     const elStartAt = document.getElementById("timer-started-at");
@@ -887,32 +922,114 @@
     }
 
     elStart.style.display = "none";
+    elPause.style.display = "block";
     elStop.style.display  = "block";
-    elClock.className     = "timer-clock running";
-    elStatus.textContent  = "Clocked in";
     elStartAt.textContent = "Started at " + fmtTime12(new Date(startTimestamp));
+
+    if (isPaused) {
+      elClock.className    = "timer-clock paused";
+      elStatus.textContent = "On break";
+      elPause.innerHTML    = "▶&nbsp; Resume";
+      elPause.classList.add("active");
+      // Show worked time frozen at pause start
+      const workedMs = pauseStart - startTimestamp - totalPausedMs;
+      elClock.textContent = fmtElapsed(Math.max(0, workedMs));
+    } else {
+      elClock.className    = "timer-clock running";
+      elStatus.textContent = "Clocked in";
+      elPause.innerHTML    = "⏸&nbsp; Pause";
+      elPause.classList.remove("active");
+    }
 
     tickTimer();
     timerInterval = setInterval(tickTimer, 1000);
   }
 
   function tickTimer() {
-    const el = document.getElementById("timer-clock");
-    if (el) el.textContent = fmtElapsed(Date.now() - startTimestamp);
+    const clockEl = document.getElementById("timer-clock");
+    const breakEl = document.getElementById("timer-break");
+    if (!clockEl) return;
+
+    if (isPaused && pauseStart) {
+      // Break ticking — update break duration, leave worked time frozen
+      const totalBreakMs = totalPausedMs + (Date.now() - pauseStart);
+      if (breakEl) breakEl.textContent = "Break: " + fmtElapsed(totalBreakMs);
+    } else {
+      // Worked time ticking
+      const workedMs = Date.now() - startTimestamp - totalPausedMs;
+      clockEl.textContent = fmtElapsed(Math.max(0, workedMs));
+      if (breakEl) breakEl.textContent = totalPausedMs > 0
+        ? "Total break: " + fmtElapsed(totalPausedMs) : "";
+    }
+  }
+
+  function pauseTimer() {
+    if (!startTimestamp || isPaused) return;
+    isPaused   = true;
+    pauseStart = Date.now();
+
+    localStorage.setItem("ft_timer_paused",       "1");
+    localStorage.setItem("ft_timer_pause_start",  String(pauseStart));
+    localStorage.setItem("ft_timer_total_paused", String(totalPausedMs));
+
+    const elPause = document.getElementById("btn-pause");
+    elPause.innerHTML = "▶&nbsp; Resume";
+    elPause.classList.add("active");
+    document.getElementById("timer-clock").className    = "timer-clock paused";
+    document.getElementById("timer-status").textContent = "On break";
+  }
+
+  function resumeTimer() {
+    if (!startTimestamp || !isPaused) return;
+    totalPausedMs += Date.now() - pauseStart;
+    isPaused   = false;
+    pauseStart = null;
+
+    localStorage.setItem("ft_timer_total_paused", String(totalPausedMs));
+    localStorage.removeItem("ft_timer_paused");
+    localStorage.removeItem("ft_timer_pause_start");
+
+    const elPause = document.getElementById("btn-pause");
+    elPause.innerHTML = "⏸&nbsp; Pause";
+    elPause.classList.remove("active");
+    document.getElementById("timer-clock").className    = "timer-clock running";
+    document.getElementById("timer-status").textContent = "Clocked in";
+
+    tickTimer();
+  }
+
+  function togglePause() {
+    if (isPaused) resumeTimer();
+    else          pauseTimer();
   }
 
   function stopTimer() {
+    // Finalize any active break
+    if (isPaused && pauseStart) {
+      totalPausedMs += Date.now() - pauseStart;
+      isPaused   = false;
+      pauseStart = null;
+    }
+
     clearInterval(timerInterval);
     timerInterval = null;
     endTimestamp  = Date.now();
+
     localStorage.removeItem("ft_timer_start");
+    localStorage.removeItem("ft_timer_paused");
+    localStorage.removeItem("ft_timer_pause_start");
+    localStorage.removeItem("ft_timer_total_paused");
 
     document.getElementById("btn-start").style.display    = "block";
+    document.getElementById("btn-pause").style.display    = "none";
     document.getElementById("btn-stop").style.display     = "none";
     document.getElementById("timer-clock").className      = "timer-clock stopped";
     document.getElementById("timer-status").textContent   = "Clocked out";
     document.getElementById("timer-started-at").textContent = "";
-    document.getElementById("timer-clock").textContent    = fmtElapsed(endTimestamp - startTimestamp);
+    document.getElementById("timer-break").textContent    = "";
+
+    const workedMs = endTimestamp - startTimestamp - totalPausedMs;
+    document.getElementById("timer-clock").textContent = fmtElapsed(Math.max(0, workedMs));
 
     document.getElementById("f-start").value = toTimeInput(new Date(startTimestamp));
     document.getElementById("f-end").value   = toTimeInput(new Date(endTimestamp));
@@ -931,16 +1048,24 @@
     document.getElementById("timer-clock").textContent   = "00:00:00";
     document.getElementById("timer-clock").className     = "timer-clock";
     document.getElementById("timer-status").textContent  = "Ready to clock in";
+    document.getElementById("timer-break").textContent   = "";
     startTimestamp = null;
     endTimestamp   = null;
+    isPaused       = false;
+    pauseStart     = null;
+    totalPausedMs  = 0;
   }
 
   function recalcDuration() {
     const s = document.getElementById("f-start").value;
     const e = document.getElementById("f-end").value;
-    if (!s || !e) { document.getElementById("calc-duration").textContent = "—"; return; }
-    const diff = (timeToDate(e) - timeToDate(s)) / 3600000;
-    document.getElementById("calc-duration").textContent = diff > 0 ? fmtHours(diff) : "—";
+    const el = document.getElementById("calc-duration");
+    if (!s || !e) { el.textContent = "—"; return; }
+    const totalDiff = (timeToDate(e) - timeToDate(s)) / 3600000;
+    const breakHrs  = totalPausedMs / 3600000;
+    const worked    = totalDiff - breakHrs;
+    if (worked <= 0) { el.textContent = "—"; return; }
+    el.textContent = fmtHours(worked) + (breakHrs > 0 ? "  (break: " + fmtHours(breakHrs) + ")" : "");
   }
 
   function timeToDate(timeStr) {
@@ -985,7 +1110,8 @@
         project:     project,
         startTime:   startISO,
         endTime:     endISO,
-        description: desc
+        description: desc,
+        pausedMs:    totalPausedMs
       });
 
       if (res.success) {
@@ -1000,6 +1126,9 @@
         document.getElementById("f-category").value = "";
         startTimestamp = null;
         endTimestamp   = null;
+        isPaused       = false;
+        pauseStart     = null;
+        totalPausedMs  = 0;
       } else {
         toast("Error: " + (res.error || "Unknown"), "error");
       }
