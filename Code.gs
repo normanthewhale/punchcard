@@ -76,7 +76,9 @@ function logTime(params) {
   var startDT     = new Date(params.startTime);
   var endDT       = new Date(params.endTime);
   var pausedMs    = parseFloat(params.pausedMs) || 0;
-  var durationHrs = ((endDT - startDT - pausedMs) / 3600000).toFixed(2);
+  var durationHrs = params.overrideDuration != null
+    ? parseFloat(params.overrideDuration).toFixed(2)
+    : ((endDT - startDT - pausedMs) / 3600000).toFixed(2);
 
   // Pre-format the next row's date/time columns as plain text so Sheets
   // doesn't auto-convert the formatted strings back into date/time cell types.

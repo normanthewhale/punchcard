@@ -109,6 +109,29 @@
     .btn-pause:hover  { background: var(--bg2); color: var(--text); }
     .btn-pause.active { border-color: var(--orange); color: var(--orange); background: rgba(232,119,58,0.08); }
 
+    /* ── Split time ── */
+    .split-row { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
+    .split-row-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .split-label { font-size: 11px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text3); }
+    .split-remove-btn { background: none; border: none; color: var(--text3); font-size: 18px; cursor: pointer; padding: 0 4px; line-height: 1; border-radius: 6px; }
+    .split-remove-btn:hover { color: var(--red); background: rgba(224,84,84,0.1); }
+    .split-hours-wrap { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .split-hours-wrap input { margin-bottom: 0; flex: 1; }
+    .split-hrs-fmt { font-size: 14px; font-weight: 600; color: var(--orange); white-space: nowrap; min-width: 38px; }
+    .split-budget { margin: 4px 0 16px; }
+    .split-budget-bar { height: 4px; background: var(--bg3); border-radius: 2px; margin-bottom: 6px; overflow: hidden; }
+    #split-budget-fill { height: 100%; background: var(--orange); border-radius: 2px; transition: width .2s, background .2s; width: 0%; }
+    #split-budget-fill.over { background: var(--red); }
+    #split-budget-text { font-size: 12px; color: var(--text3); }
+    #split-budget-text.over { color: var(--red); font-weight: 600; }
+    .btn-add-split {
+      display: block; width: 100%; padding: 12px;
+      border: 1.5px dashed var(--border); border-radius: var(--radius);
+      background: none; color: var(--text3); font-size: 14px; font-weight: 500;
+      cursor: pointer; margin-bottom: 16px; transition: all .15s;
+    }
+    .btn-add-split:hover { border-color: var(--orange); color: var(--orange); }
+
     /* ── Buttons ── */
     .btn { display: block; width: 100%; padding: 16px; border: none; border-radius: var(--radius); font-size: 17px; font-weight: 600; cursor: pointer; transition: transform .1s, opacity .2s; letter-spacing: -0.2px; }
     .btn:active { transform: scale(0.97); }
@@ -425,18 +448,16 @@
         </div>
       </div>
 
-      <label for="f-category">Category</label>
-      <select id="f-category" onchange="selectCategory(this.value)">
-        <option value="">Select a category…</option>
-      </select>
+      <!-- Dynamic split rows (populated by renderSplits) -->
+      <div id="splits-container"></div>
 
-      <label for="f-project">House / Project</label>
-      <select id="f-project">
-        <option value="">Select a category first…</option>
-      </select>
+      <!-- Budget bar — only shown when 2+ splits -->
+      <div class="split-budget" id="split-budget" style="display:none;">
+        <div class="split-budget-bar"><div id="split-budget-fill"></div></div>
+        <span id="split-budget-text"></span>
+      </div>
 
-      <label for="f-desc">What was done?</label>
-      <textarea id="f-desc" placeholder="e.g. Framed the garage walls, installed roof trusses on unit 3…" rows="4"></textarea>
+      <button class="btn-add-split" onclick="addSplit()">＋ Split between another project</button>
 
       <button class="btn btn-submit" id="btn-submit" onclick="submitLog()">Save &amp; Submit</button>
       <button class="btn btn-secondary" style="margin-top:10px;" onclick="cancelSubmit()">Discard</button>
@@ -636,6 +657,8 @@
   let isPaused         = false;
   let pauseStart       = null;   // timestamp when current break began
   let totalPausedMs    = 0;      // accumulated break milliseconds
+  let splits           = [];     // [{ cat, proj, hours, desc }, ...]
+  let totalWorkedHrs   = 0;      // clocked hours excluding break
   let workerName       = localStorage.getItem("ft_worker") || "";
   let adminCode        = localStorage.getItem("ft_admin_code") || "";
   let isAdminMode      = false;
@@ -815,11 +838,9 @@
   }
 
   function renderCategoryDropdown() {
-    const sel  = document.getElementById("f-category");
-    const prev = sel.value;
-    sel.innerHTML = '<option value="">Select a category…</option>' +
-      uniqueCategories().map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
-    if (prev) sel.value = prev;
+    // f-category no longer exists as a static element (replaced by dynamic split rows)
+    // Re-render open split rows if categories update while form is visible
+    if (splits.length > 0) renderSplits();
   }
 
   function populateFilterCategoryDropdown() {
@@ -837,17 +858,148 @@
       names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
   }
 
-  // ── Category selection (clock-out form) ───────────────────────────────────
-  function selectCategory(cat) {
-    selectedCategory = cat;
-    const filtered   = cat ? allProjects.filter(p => p.category === cat) : [];
-    const sel        = document.getElementById("f-project");
-    if (!cat) {
-      sel.innerHTML = '<option value="">Select a category first…</option>';
-    } else {
-      sel.innerHTML = filtered.length
-        ? '<option value="">Select a project…</option>' + filtered.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join("")
-        : '<option value="">No projects in this category</option>';
+  // ── Split time (log entry form) ──────────────────────────────────────────
+
+  function initSplits() {
+    totalWorkedHrs = Math.max(0, (endTimestamp - startTimestamp - totalPausedMs) / 3600000);
+    splits = [{ cat: "", proj: "", hours: totalWorkedHrs, desc: "" }];
+    renderSplits();
+  }
+
+  function syncSplitsFromDOM() {
+    splits.forEach((s, i) => {
+      const row = document.getElementById("split-row-" + i);
+      if (!row) return;
+      const catSel  = row.querySelector(".split-cat-sel");
+      const projSel = row.querySelector(".split-proj-sel");
+      const hoursInp = row.querySelector(".split-hours-inp");
+      const descInp  = row.querySelector(".split-desc-inp");
+      if (catSel)    s.cat   = catSel.value;
+      if (projSel)   s.proj  = projSel.value;
+      if (hoursInp)  s.hours = parseFloat(hoursInp.value) || 0;
+      if (descInp)   s.desc  = descInp.value;
+    });
+  }
+
+  function renderSplits() {
+    const container = document.getElementById("splits-container");
+    if (!container) return;
+    const multi = splits.length > 1;
+
+    container.innerHTML = splits.map((s, i) => {
+      const cats  = uniqueCategories();
+      const projs = s.cat ? allProjects.filter(p => p.category === s.cat) : [];
+
+      const header = multi
+        ? `<div class="split-row-header">
+             <span class="split-label">Project ${i + 1}</span>
+             <button class="split-remove-btn" onclick="removeSplit(${i})" title="Remove">✕</button>
+           </div>`
+        : "";
+
+      const projOptions = !s.cat
+        ? `<option value="">Select a category first…</option>`
+        : projs.length
+          ? `<option value="">Select a project…</option>` +
+            projs.map(p => `<option value="${esc(p.name)}"${p.name === s.proj ? " selected" : ""}>${esc(p.name)}</option>`).join("")
+          : `<option value="">No projects in this category</option>`;
+
+      const hoursField = multi
+        ? `<label>Hours</label>
+           <div class="split-hours-wrap">
+             <input type="number" class="split-hours-inp" data-idx="${i}"
+                    value="${s.hours > 0 ? s.hours : ""}"
+                    placeholder="0.00" step="0.25" min="0"
+                    oninput="onSplitHoursInput(this)" />
+             <span class="split-hrs-fmt">${s.hours > 0 ? fmtHours(s.hours) : "—"}</span>
+           </div>`
+        : "";
+
+      return `<div class="split-row" id="split-row-${i}">
+        ${header}
+        <label>Category</label>
+        <select class="split-cat-sel" data-idx="${i}" onchange="onSplitCatChange(this)">
+          <option value="">Select a category…</option>
+          ${cats.map(c => `<option value="${esc(c)}"${c === s.cat ? " selected" : ""}>${esc(c)}</option>`).join("")}
+        </select>
+        <label>House / Project</label>
+        <select class="split-proj-sel" data-idx="${i}">${projOptions}</select>
+        ${hoursField}
+        <label>What was done?</label>
+        <textarea class="split-desc-inp" data-idx="${i}" rows="${multi ? 2 : 4}"
+          placeholder="e.g. Framed the garage walls…">${esc(s.desc || "")}</textarea>
+      </div>`;
+    }).join("");
+
+    updateSplitBudget();
+  }
+
+  function addSplit() {
+    syncSplitsFromDOM();
+    splits.push({ cat: "", proj: "", hours: 0, desc: "" });
+    renderSplits();
+  }
+
+  function removeSplit(i) {
+    syncSplitsFromDOM();
+    splits.splice(i, 1);
+    if (splits.length === 1) splits[0].hours = totalWorkedHrs;
+    renderSplits();
+  }
+
+  function onSplitCatChange(el) {
+    const i     = parseInt(el.dataset.idx);
+    splits[i].cat  = el.value;
+    splits[i].proj = "";
+    const row     = document.getElementById("split-row-" + i);
+    const projSel = row ? row.querySelector(".split-proj-sel") : null;
+    if (!projSel) return;
+    const projs = el.value ? allProjects.filter(p => p.category === el.value) : [];
+    projSel.innerHTML = !el.value
+      ? `<option value="">Select a category first…</option>`
+      : projs.length
+        ? `<option value="">Select a project…</option>` +
+          projs.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join("")
+        : `<option value="">No projects in this category</option>`;
+  }
+
+  function onSplitHoursInput(el) {
+    const i   = parseInt(el.dataset.idx);
+    const val = parseFloat(el.value) || 0;
+    splits[i].hours = val;
+    const row   = document.getElementById("split-row-" + i);
+    const fmtEl = row ? row.querySelector(".split-hrs-fmt") : null;
+    if (fmtEl) fmtEl.textContent = val > 0 ? fmtHours(val) : "—";
+    updateSplitBudget();
+  }
+
+  function updateSplitBudget() {
+    const budgetDiv = document.getElementById("split-budget");
+    const fillEl    = document.getElementById("split-budget-fill");
+    const textEl    = document.getElementById("split-budget-text");
+    if (!budgetDiv) return;
+
+    if (splits.length <= 1) { budgetDiv.style.display = "none"; return; }
+    budgetDiv.style.display = "";
+
+    const allocated = splits.reduce((s, sp) => s + (sp.hours || 0), 0);
+    const over      = allocated > totalWorkedHrs + 0.001;
+    const pct       = totalWorkedHrs > 0 ? Math.min((allocated / totalWorkedHrs) * 100, 100) : 0;
+    const remaining = Math.max(0, totalWorkedHrs - allocated);
+
+    if (fillEl) { fillEl.style.width = pct + "%"; fillEl.className = over ? "over" : ""; }
+
+    if (textEl) {
+      if (over) {
+        textEl.textContent = fmtHours(allocated) + " allocated — " + fmtHours(allocated - totalWorkedHrs) + " over limit";
+        textEl.className = "over";
+      } else if (remaining < 0.001) {
+        textEl.textContent = fmtHours(allocated) + " of " + fmtHours(totalWorkedHrs) + " allocated ✓";
+        textEl.className = "";
+      } else {
+        textEl.textContent = fmtHours(allocated) + " of " + fmtHours(totalWorkedHrs) + " · " + fmtHours(remaining) + " remaining";
+        textEl.className = "";
+      }
     }
   }
 
@@ -1035,9 +1187,7 @@
     document.getElementById("f-end").value   = toTimeInput(new Date(endTimestamp));
     recalcDuration();
 
-    selectedCategory = "";
-    document.getElementById("f-category").value = "";
-    document.getElementById("f-project").innerHTML = '<option value="">Select a category first…</option>';
+    initSplits();
 
     document.getElementById("submit-card").style.display = "block";
     document.getElementById("submit-card").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1049,11 +1199,9 @@
     document.getElementById("timer-clock").className     = "timer-clock";
     document.getElementById("timer-status").textContent  = "Ready to clock in";
     document.getElementById("timer-break").textContent   = "";
-    startTimestamp = null;
-    endTimestamp   = null;
-    isPaused       = false;
-    pauseStart     = null;
-    totalPausedMs  = 0;
+    splits = []; totalWorkedHrs = 0;
+    startTimestamp = null; endTimestamp = null;
+    isPaused = false; pauseStart = null; totalPausedMs = 0;
   }
 
   function recalcDuration() {
@@ -1081,56 +1229,74 @@
 
   // ── Submit ────────────────────────────────────────────────────────────────
   async function submitLog() {
-    const project = document.getElementById("f-project").value;
-    const desc    = document.getElementById("f-desc").value.trim();
-    const startT  = document.getElementById("f-start").value;
-    const endT    = document.getElementById("f-end").value;
+    syncSplitsFromDOM();
 
-    if (!workerName)       { openWorkerModal(); return; }
-    if (!selectedCategory) { toast("Please select a category.", "error"); return; }
-    if (!project)          { toast("Please select a house / project.", "error"); return; }
-    if (!desc)             { toast("Please describe the work done.", "error"); return; }
-    if (!startT || !endT)  { toast("Start and end time required.", "error"); return; }
+    if (!workerName) { openWorkerModal(); return; }
 
+    const startT = document.getElementById("f-start").value;
+    const endT   = document.getElementById("f-end").value;
+    if (!startT || !endT) { toast("Start and end time required.", "error"); return; }
     const startISO = timeInputToISO(startT);
     const endISO   = timeInputToISO(endT);
-
     if (new Date(endISO) <= new Date(startISO)) {
       toast("End time must be after start time.", "error"); return;
+    }
+
+    // Validate every split row
+    for (let i = 0; i < splits.length; i++) {
+      const s   = splits[i];
+      const lbl = splits.length > 1 ? `Project ${i + 1}` : "entry";
+      if (!s.cat)         { toast(`Select a category for ${lbl}.`,  "error"); return; }
+      if (!s.proj)        { toast(`Select a project for ${lbl}.`,   "error"); return; }
+      if (!s.desc.trim()) { toast(`Add a description for ${lbl}.`,  "error"); return; }
+      if (splits.length > 1 && !(s.hours > 0)) {
+        toast(`Enter hours for ${lbl}.`, "error"); return;
+      }
+    }
+
+    if (splits.length > 1) {
+      const allocated = splits.reduce((s, sp) => s + (sp.hours || 0), 0);
+      if (allocated > totalWorkedHrs + 0.001) {
+        toast("Split total exceeds clocked time.", "error"); return;
+      }
     }
 
     const btn = document.getElementById("btn-submit");
     btn.disabled = true; btn.textContent = "Saving…";
 
     try {
-      const res = await apiFetch({
-        action:      "logTime",
-        workerName:  workerName,
-        category:    selectedCategory,
-        project:     project,
-        startTime:   startISO,
-        endTime:     endISO,
-        description: desc,
-        pausedMs:    totalPausedMs
-      });
-
-      if (res.success) {
-        toast("✅ Entry saved — " + fmtHours(parseFloat(res.duration) || 0), "success");
-        document.getElementById("f-desc").value    = "";
-        document.getElementById("f-project").value = "";
-        document.getElementById("submit-card").style.display = "none";
-        document.getElementById("timer-clock").textContent   = "00:00:00";
-        document.getElementById("timer-clock").className     = "timer-clock";
-        document.getElementById("timer-status").textContent  = "Ready to clock in";
-        selectedCategory = "";
-        document.getElementById("f-category").value = "";
-        startTimestamp = null;
-        endTimestamp   = null;
-        isPaused       = false;
-        pauseStart     = null;
-        totalPausedMs  = 0;
+      if (splits.length === 1) {
+        // Single entry — same as before
+        const res = await apiFetch({
+          action: "logTime", workerName,
+          category: splits[0].cat, project: splits[0].proj,
+          startTime: startISO, endTime: endISO,
+          description: splits[0].desc, pausedMs: totalPausedMs
+        });
+        if (res.success) {
+          toast("✅ Entry saved — " + fmtHours(parseFloat(res.duration) || 0), "success");
+          resetAfterSubmit();
+        } else {
+          toast("Error: " + (res.error || "Unknown"), "error");
+        }
       } else {
-        toast("Error: " + (res.error || "Unknown"), "error");
+        // One logTime call per split, using overrideDuration
+        const results = [];
+        for (const s of splits) {
+          results.push(await apiFetch({
+            action: "logTime", workerName,
+            category: s.cat, project: s.proj,
+            startTime: startISO, endTime: endISO,
+            description: s.desc, overrideDuration: s.hours
+          }));
+        }
+        if (results.every(r => r.success)) {
+          const totalH = splits.reduce((s, sp) => s + sp.hours, 0);
+          toast("✅ " + splits.length + " entries saved — " + fmtHours(totalH) + " total", "success");
+          resetAfterSubmit();
+        } else {
+          toast("Some entries failed to save.", "error");
+        }
       }
     } catch (err) {
       toast("Could not reach server. Check connection.", "error");
@@ -1138,6 +1304,16 @@
     } finally {
       btn.disabled = false; btn.textContent = "Save & Submit";
     }
+  }
+
+  function resetAfterSubmit() {
+    document.getElementById("submit-card").style.display = "none";
+    document.getElementById("timer-clock").textContent   = "00:00:00";
+    document.getElementById("timer-clock").className     = "timer-clock";
+    document.getElementById("timer-status").textContent  = "Ready to clock in";
+    splits = []; totalWorkedHrs = 0;
+    startTimestamp = null; endTimestamp = null;
+    isPaused = false; pauseStart = null; totalPausedMs = 0;
   }
 
   // ── History ───────────────────────────────────────────────────────────────
