@@ -115,9 +115,11 @@
     .split-label { font-size: 11px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text3); }
     .split-remove-btn { background: none; border: none; color: var(--text3); font-size: 18px; cursor: pointer; padding: 0 4px; line-height: 1; border-radius: 6px; }
     .split-remove-btn:hover { color: var(--red); background: rgba(224,84,84,0.1); }
-    .split-hours-wrap { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-    .split-hours-wrap input { margin-bottom: 0; flex: 1; }
-    .split-hrs-fmt { font-size: 14px; font-weight: 600; color: var(--orange); white-space: nowrap; min-width: 38px; }
+    .split-time-row { display: flex; align-items: flex-end; gap: 8px; margin-bottom: 14px; }
+    .split-time-col { display: flex; flex-direction: column; flex: 1; }
+    .split-time-col label { margin-bottom: 4px; }
+    .split-time-col input[type="time"] { margin-bottom: 0; width: 100%; }
+    .split-time-dash { font-size: 20px; color: var(--text3); padding-bottom: 10px; flex-shrink: 0; }
     .split-budget { margin: 4px 0 16px; }
     .split-budget-bar { height: 4px; background: var(--bg3); border-radius: 2px; margin-bottom: 6px; overflow: hidden; }
     #split-budget-fill { height: 100%; background: var(--orange); border-radius: 2px; transition: width .2s, background .2s; width: 0%; }
@@ -860,9 +862,25 @@
 
   // ── Split time (log entry form) ──────────────────────────────────────────
 
+  function tsToTimeStr(ms) {
+    const d = new Date(ms);
+    return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+  }
+
+  function timeStrToAbsoluteMs(timeStr) {
+    if (!timeStr) return 0;
+    const ref = new Date(startTimestamp);
+    const [h, m] = timeStr.split(":").map(Number);
+    const d = new Date(ref);
+    d.setHours(h, m, 0, 0);
+    // Overnight shift: if result lands more than 1h before clock-in, it must be next day
+    if (d.getTime() < startTimestamp - 3600000) d.setDate(d.getDate() + 1);
+    return d.getTime();
+  }
+
   function initSplits() {
     totalWorkedHrs = Math.max(0, (endTimestamp - startTimestamp - totalPausedMs) / 3600000);
-    splits = [{ cat: "", proj: "", hours: totalWorkedHrs, desc: "" }];
+    splits = [{ cat: "", proj: "", startTime: tsToTimeStr(startTimestamp), endTime: tsToTimeStr(endTimestamp), desc: "" }];
     renderSplits();
   }
 
@@ -870,14 +888,16 @@
     splits.forEach((s, i) => {
       const row = document.getElementById("split-row-" + i);
       if (!row) return;
-      const catSel  = row.querySelector(".split-cat-sel");
-      const projSel = row.querySelector(".split-proj-sel");
-      const hoursInp = row.querySelector(".split-hours-inp");
+      const catSel   = row.querySelector(".split-cat-sel");
+      const projSel  = row.querySelector(".split-proj-sel");
+      const startInp = row.querySelector(".split-start-inp");
+      const endInp   = row.querySelector(".split-end-inp");
       const descInp  = row.querySelector(".split-desc-inp");
-      if (catSel)    s.cat   = catSel.value;
-      if (projSel)   s.proj  = projSel.value;
-      if (hoursInp)  s.hours = parseFloat(hoursInp.value) || 0;
-      if (descInp)   s.desc  = descInp.value;
+      if (catSel)   s.cat       = catSel.value;
+      if (projSel)  s.proj      = projSel.value;
+      if (startInp) s.startTime = startInp.value;
+      if (endInp)   s.endTime   = endInp.value;
+      if (descInp)  s.desc      = descInp.value;
     });
   }
 
@@ -904,14 +924,24 @@
             projs.map(p => `<option value="${esc(p.name)}"${p.name === s.proj ? " selected" : ""}>${esc(p.name)}</option>`).join("")
           : `<option value="">No projects in this category</option>`;
 
-      const hoursField = multi
-        ? `<label>Hours</label>
-           <div class="split-hours-wrap">
-             <input type="number" class="split-hours-inp" data-idx="${i}"
-                    value="${s.hours > 0 ? s.hours : ""}"
-                    placeholder="0.00" step="0.25" min="0"
-                    oninput="onSplitHoursInput(this)" />
-             <span class="split-hrs-fmt">${s.hours > 0 ? fmtHours(s.hours) : "—"}</span>
+      const clockInTime  = tsToTimeStr(startTimestamp);
+      const clockOutTime = tsToTimeStr(endTimestamp);
+
+      const timeField = multi
+        ? `<div class="split-time-row">
+             <div class="split-time-col">
+               <label>Start</label>
+               <input type="time" class="split-start-inp" data-idx="${i}"
+                      value="${s.startTime || clockInTime}"
+                      onchange="onSplitTimeChange(this)" />
+             </div>
+             <span class="split-time-dash">–</span>
+             <div class="split-time-col">
+               <label>End</label>
+               <input type="time" class="split-end-inp" data-idx="${i}"
+                      value="${s.endTime || clockOutTime}"
+                      onchange="onSplitTimeChange(this)" />
+             </div>
            </div>`
         : "";
 
@@ -924,7 +954,7 @@
         </select>
         <label>House / Project</label>
         <select class="split-proj-sel" data-idx="${i}">${projOptions}</select>
-        ${hoursField}
+        ${timeField}
         <label>What was done?</label>
         <textarea class="split-desc-inp" data-idx="${i}" rows="${multi ? 2 : 4}"
           placeholder="e.g. Framed the garage walls…">${esc(s.desc || "")}</textarea>
@@ -936,14 +966,19 @@
 
   function addSplit() {
     syncSplitsFromDOM();
-    splits.push({ cat: "", proj: "", hours: 0, desc: "" });
+    const clockOutTime = tsToTimeStr(endTimestamp);
+    const lastEnd = splits[splits.length - 1].endTime || clockOutTime;
+    splits.push({ cat: "", proj: "", startTime: lastEnd, endTime: clockOutTime, desc: "" });
     renderSplits();
   }
 
   function removeSplit(i) {
     syncSplitsFromDOM();
     splits.splice(i, 1);
-    if (splits.length === 1) splits[0].hours = totalWorkedHrs;
+    if (splits.length === 1) {
+      splits[0].startTime = tsToTimeStr(startTimestamp);
+      splits[0].endTime   = tsToTimeStr(endTimestamp);
+    }
     renderSplits();
   }
 
@@ -963,13 +998,8 @@
         : `<option value="">No projects in this category</option>`;
   }
 
-  function onSplitHoursInput(el) {
-    const i   = parseInt(el.dataset.idx);
-    const val = parseFloat(el.value) || 0;
-    splits[i].hours = val;
-    const row   = document.getElementById("split-row-" + i);
-    const fmtEl = row ? row.querySelector(".split-hrs-fmt") : null;
-    if (fmtEl) fmtEl.textContent = val > 0 ? fmtHours(val) : "—";
+  function onSplitTimeChange(el) {
+    syncSplitsFromDOM();
     updateSplitBudget();
   }
 
@@ -982,22 +1012,32 @@
     if (splits.length <= 1) { budgetDiv.style.display = "none"; return; }
     budgetDiv.style.display = "";
 
-    const allocated = splits.reduce((s, sp) => s + (sp.hours || 0), 0);
-    const over      = allocated > totalWorkedHrs + 0.001;
-    const pct       = totalWorkedHrs > 0 ? Math.min((allocated / totalWorkedHrs) * 100, 100) : 0;
-    const remaining = Math.max(0, totalWorkedHrs - allocated);
+    let allocatedMs = 0;
+    for (const s of splits) {
+      if (s.startTime && s.endTime) {
+        const sMs = timeStrToAbsoluteMs(s.startTime);
+        const eMs = timeStrToAbsoluteMs(s.endTime);
+        if (eMs > sMs) allocatedMs += (eMs - sMs);
+      }
+    }
+
+    const workedMs  = totalWorkedHrs * 3600000;
+    const allocHrs  = allocatedMs / 3600000;
+    const over      = allocatedMs > workedMs + 60000;
+    const pct       = workedMs > 0 ? Math.min((allocatedMs / workedMs) * 100, 100) : 0;
+    const remaining = Math.max(0, (workedMs - allocatedMs) / 3600000);
 
     if (fillEl) { fillEl.style.width = pct + "%"; fillEl.className = over ? "over" : ""; }
 
     if (textEl) {
       if (over) {
-        textEl.textContent = fmtHours(allocated) + " allocated — " + fmtHours(allocated - totalWorkedHrs) + " over limit";
+        textEl.textContent = fmtHours(allocHrs) + " allocated — " + fmtHours(allocHrs - totalWorkedHrs) + " over limit";
         textEl.className = "over";
-      } else if (remaining < 0.001) {
-        textEl.textContent = fmtHours(allocated) + " of " + fmtHours(totalWorkedHrs) + " allocated ✓";
+      } else if (remaining < 0.017) {
+        textEl.textContent = fmtHours(allocHrs) + " of " + fmtHours(totalWorkedHrs) + " allocated ✓";
         textEl.className = "";
       } else {
-        textEl.textContent = fmtHours(allocated) + " of " + fmtHours(totalWorkedHrs) + " · " + fmtHours(remaining) + " remaining";
+        textEl.textContent = fmtHours(allocHrs) + " of " + fmtHours(totalWorkedHrs) + " · " + fmtHours(remaining) + " remaining";
         textEl.className = "";
       }
     }
@@ -1249,14 +1289,32 @@
       if (!s.cat)         { toast(`Select a category for ${lbl}.`,  "error"); return; }
       if (!s.proj)        { toast(`Select a project for ${lbl}.`,   "error"); return; }
       if (!s.desc.trim()) { toast(`Add a description for ${lbl}.`,  "error"); return; }
-      if (splits.length > 1 && !(s.hours > 0)) {
-        toast(`Enter hours for ${lbl}.`, "error"); return;
+      if (splits.length > 1) {
+        if (!s.startTime || !s.endTime) {
+          toast(`Set start and end time for ${lbl}.`, "error"); return;
+        }
+        const sMs = timeStrToAbsoluteMs(s.startTime);
+        const eMs = timeStrToAbsoluteMs(s.endTime);
+        if (eMs <= sMs) {
+          toast(`End time must be after start time for ${lbl}.`, "error"); return;
+        }
+        if (sMs < startTimestamp - 60000) {
+          toast(`Start time for ${lbl} is before your clock-in time.`, "error"); return;
+        }
+        if (eMs > endTimestamp + 60000) {
+          toast(`End time for ${lbl} is after your clock-out time.`, "error"); return;
+        }
       }
     }
 
     if (splits.length > 1) {
-      const allocated = splits.reduce((s, sp) => s + (sp.hours || 0), 0);
-      if (allocated > totalWorkedHrs + 0.001) {
+      let allocatedMs = 0;
+      for (const s of splits) {
+        const sMs = timeStrToAbsoluteMs(s.startTime);
+        const eMs = timeStrToAbsoluteMs(s.endTime);
+        if (eMs > sMs) allocatedMs += (eMs - sMs);
+      }
+      if (allocatedMs > totalWorkedHrs * 3600000 + 60000) {
         toast("Split total exceeds clocked time.", "error"); return;
       }
     }
@@ -1280,19 +1338,23 @@
           toast("Error: " + (res.error || "Unknown"), "error");
         }
       } else {
-        // One logTime call per split, using overrideDuration
+        // One logTime call per split using actual start/end times
         const results = [];
+        let totalAllocatedMs = 0;
         for (const s of splits) {
+          const sMs = timeStrToAbsoluteMs(s.startTime);
+          const eMs = timeStrToAbsoluteMs(s.endTime);
+          if (eMs > sMs) totalAllocatedMs += (eMs - sMs);
           results.push(await apiFetch({
             action: "logTime", workerName,
             category: s.cat, project: s.proj,
-            startTime: startISO, endTime: endISO,
-            description: s.desc, overrideDuration: s.hours
+            startTime: new Date(sMs).toISOString(),
+            endTime:   new Date(eMs).toISOString(),
+            description: s.desc
           }));
         }
         if (results.every(r => r.success)) {
-          const totalH = splits.reduce((s, sp) => s + sp.hours, 0);
-          toast("✅ " + splits.length + " entries saved — " + fmtHours(totalH) + " total", "success");
+          toast("✅ " + splits.length + " entries saved — " + fmtHours(totalAllocatedMs / 3600000) + " total", "success");
           resetAfterSubmit();
         } else {
           toast("Some entries failed to save.", "error");
