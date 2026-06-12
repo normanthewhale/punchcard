@@ -28,6 +28,7 @@ function handleRequest(e) {
     else if (action === "saveWorkerRate") output = saveWorkerRate(params);
     else if (action === "getWorkerRates") output = getWorkerRates(params);
     else if (action === "getWorkers")     output = getWorkers(params);
+    else if (action === "ping")            output = { ok: true }
     else                                  output = { error: "Unknown action: " + action };
   } catch(err) {
     output = { error: err.toString() };

@@ -297,6 +297,14 @@
     #install-banner strong { color: var(--text); display: block; margin-bottom: 4px; }
     #install-banner-inner { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
     #install-dismiss-btn { background: none; border: none; color: var(--text3); font-size: 18px; line-height: 1; cursor: pointer; padding: 0; flex-shrink: 0; }
+    #connection-banner {
+      display: none; background: var(--bg3); border: 1px solid var(--red);
+      border-radius: var(--radius); padding: 14px 16px; margin: 12px 16px 0;
+      font-size: 14px; line-height: 1.5; color: var(--text2);
+    }
+    #connection-banner strong { color: var(--red); display: block; margin-bottom: 4px; }
+    #connection-banner-inner { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    #connection-retry-btn { background: var(--red); color: #fff; border: none; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
     #install-dismiss-btn:hover { color: var(--text); }
 
     /* ── Install info icon + tooltip ── */
@@ -401,6 +409,16 @@
     <button role="tab" class="active" onclick="switchTab('clock')"   id="tab-clock">⏱ Clock</button>
     <button role="tab"               onclick="switchTab('history')" id="tab-history">📋 Logs</button>
   </nav>
+
+  <div id="connection-banner">
+    <div id="connection-banner-inner">
+      <div>
+        <strong>Server Unavailable</strong>
+        Can't reach the server — logs can't be loaded or saved until the connection is restored.
+      </div>
+      <button id="connection-retry-btn" onclick="retryConnection()">Retry</button>
+    </div>
+  </div>
 
   <!-- ═══════════ CLOCK SCREEN ═══════════ -->
   <section class="screen active" id="screen-clock">
@@ -829,9 +847,11 @@
       renderCategoryDropdown();
       populateFilterCategoryDropdown();
       populateFilterProjectDropdown();
+      setConnectionBanner(false);
     } catch (err) {
       console.error("fetchProjects failed:", err);
-      toast("Could not load projects. Check API connection.", "error");
+      setConnectionBanner(true);
+      throw err;
     }
   }
 
@@ -1732,13 +1752,43 @@
 
   // ── API ───────────────────────────────────────────────────────────────────
   async function apiFetch(params) {
-    const res = await fetch(API_URL, {
-      method:   "POST",
-      body:     JSON.stringify(params),
-      redirect: "follow"
-    });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    return res.json();
+    const DELAYS = [0, 1500, 3000];
+    let lastErr;
+    for (let i = 0; i < DELAYS.length; i++) {
+      if (i > 0) await new Promise(r => setTimeout(r, DELAYS[i]));
+      try {
+        const res = await fetch(API_URL, {
+          method: "POST",
+          body: JSON.stringify(params),
+          redirect: "follow"
+        });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return await res.json();
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    throw lastErr;
+  }
+
+  function setConnectionBanner(show) {
+    document.getElementById("connection-banner").style.display = show ? "block" : "none";
+  }
+
+  async function retryConnection() {
+    const btn = document.getElementById("connection-retry-btn");
+    btn.textContent = "Checking…";
+    btn.disabled = true;
+    try {
+      await fetchProjects();
+      const activeScreen = document.querySelector(".screen.active");
+      if (activeScreen && activeScreen.id === "screen-history") loadHistory();
+    } catch (err) {
+      // fetchProjects handles setConnectionBanner(true) on failure
+    } finally {
+      btn.textContent = "Retry";
+      btn.disabled = false;
+    }
   }
 
   // ── Utilities ─────────────────────────────────────────────────────────────
