@@ -9,6 +9,7 @@
   <meta name="theme-color" content="#1a1a1a" />
   <link rel="manifest" href="manifest.json" />
   <title>Punchcard</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -668,7 +669,9 @@
 
 <script>
   // ── CONFIG ────────────────────────────────────────────────────────────────
-  const API_URL = "https://script.google.com/macros/s/AKfycbzy_FLvS5sTynlqbd_m93ehDzBvaPxi6tALr9pqeUPbjs__AZ4VPfixJqPCqt5TK29l/exec";
+  const SUPABASE_URL = "https://seoqecyzlmvgnnevxnoq.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_lexYJaM0gbBE_e-5WwwwYA_cygBRtzq";
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
   // ── State ─────────────────────────────────────────────────────────────────
   let timerInterval    = null;
@@ -1757,18 +1760,129 @@
     for (let i = 0; i < DELAYS.length; i++) {
       if (i > 0) await new Promise(r => setTimeout(r, DELAYS[i]));
       try {
-        const res = await fetch(API_URL, {
-          method: "POST",
-          body: JSON.stringify(params),
-          redirect: "follow"
-        });
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        return await res.json();
+        return await supabaseAction(params);
       } catch (err) {
         lastErr = err;
       }
     }
     throw lastErr;
+  }
+
+  async function supabaseAction(params) {
+    const { action } = params;
+
+    // ── Ping ──────────────────────────────────────────────────────────────────
+    if (action === "ping") {
+      const { error } = await sb.from("projects").select("id").limit(1);
+      if (error) throw new Error(error.message);
+      return { ok: true };
+    }
+
+    // ── Get projects ──────────────────────────────────────────────────────────
+    if (action === "getProjects") {
+      const { data, error } = await sb.from("projects").select("name, category").order("name");
+      if (error) throw new Error(error.message);
+      return { projects: data };
+    }
+
+    // ── Log time ──────────────────────────────────────────────────────────────
+    if (action === "logTime") {
+      const startDT  = new Date(params.startTime);
+      const endDT    = new Date(params.endTime);
+      const pausedMs = parseFloat(params.pausedMs) || 0;
+      const durHrs   = params.overrideDuration != null
+        ? parseFloat(params.overrideDuration)
+        : (endDT - startDT - pausedMs) / 3600000;
+      const { data, error } = await sb.from("time_logs").insert({
+        worker_name:  params.workerName  || "",
+        category:     params.category    || "",
+        project:      params.project     || "",
+        start_time:   startDT.toISOString(),
+        end_time:     endDT.toISOString(),
+        duration_hrs: parseFloat(durHrs.toFixed(2)),
+        description:  params.description || ""
+      }).select("id, duration_hrs").single();
+      if (error) throw new Error(error.message);
+      return { success: true, id: data.id, duration: data.duration_hrs.toFixed(2) };
+    }
+
+    // ── Get logs ──────────────────────────────────────────────────────────────
+    if (action === "getLogs") {
+      let isAdmin = false;
+      if (params.adminCode) {
+        const { error: authErr } = await sb.rpc("get_worker_rates", { admin_code: params.adminCode });
+        isAdmin = !authErr;
+      }
+      let query = sb.from("time_logs").select("*").order("submitted_at", { ascending: false });
+      if (!isAdmin) {
+        if (!params.workerName) return { logs: [], isAdmin: false };
+        query = query.eq("worker_name", params.workerName);
+      }
+      const { data, error } = await query;
+      if (error) throw new Error(error.message);
+      const logs = data.map(r => ({
+        "ID":             r.id,
+        "Worker Name":    r.worker_name,
+        "Category":       r.category,
+        "Project":        r.project,
+        "Date":           r.start_time ? r.start_time.substring(0, 10) : "",
+        "Start Time":     r.start_time ? fmtTime12(new Date(r.start_time)) : "",
+        "End Time":       r.end_time   ? fmtTime12(new Date(r.end_time))   : "",
+        "Duration (hrs)": r.duration_hrs,
+        "Description":    r.description,
+        "Submitted At":   r.submitted_at
+      }));
+      return { logs, isAdmin };
+    }
+
+    // ── Edit log ──────────────────────────────────────────────────────────────
+    if (action === "editLog") {
+      const { data: existing, error: fetchErr } = await sb
+        .from("time_logs").select("start_time, end_time").eq("id", params.id).single();
+      if (fetchErr) throw new Error(fetchErr.message);
+      const updates = {};
+      if (params.description !== undefined) updates.description = params.description;
+      if (params.startTime || params.endTime) {
+        let newStart = new Date(existing.start_time);
+        let newEnd   = new Date(existing.end_time);
+        if (params.startTime) { const [h,m] = params.startTime.split(":").map(Number); newStart.setHours(h,m,0,0); }
+        if (params.endTime)   { const [h,m] = params.endTime.split(":").map(Number);   newEnd.setHours(h,m,0,0); }
+        updates.start_time   = newStart.toISOString();
+        updates.end_time     = newEnd.toISOString();
+        const diffMs         = newEnd - newStart;
+        if (diffMs > 0) updates.duration_hrs = parseFloat((diffMs / 3600000).toFixed(2));
+      }
+      const { error } = await sb.from("time_logs").update(updates).eq("id", params.id);
+      if (error) throw new Error(error.message);
+      return { success: true };
+    }
+
+    // ── Save worker rate ──────────────────────────────────────────────────────
+    if (action === "saveWorkerRate") {
+      const { error } = await sb.from("workers").upsert({
+        name:        params.workerName,
+        rate_type:   params.rateType   || "hourly",
+        rate_amount: parseFloat(params.rateAmount) || 0
+      }, { onConflict: "name" });
+      if (error) throw new Error(error.message);
+      return { success: true };
+    }
+
+    // ── Get worker rates (admin) ───────────────────────────────────────────────
+    if (action === "getWorkerRates") {
+      const { data, error } = await sb.rpc("get_worker_rates", { admin_code: params.adminCode });
+      if (error) throw new Error(error.message);
+      return { rates: data || {} };
+    }
+
+    // ── Get workers list ──────────────────────────────────────────────────────
+    if (action === "getWorkers") {
+      const { data, error } = await sb.from("workers").select("name").order("name");
+      if (error) throw new Error(error.message);
+      return { workers: data.map(w => w.name) };
+    }
+
+    throw new Error("Unknown action: " + action);
   }
 
   function setConnectionBanner(show) {
