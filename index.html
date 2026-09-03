@@ -448,7 +448,7 @@
   <nav role="tablist">
     <button role="tab" class="active" onclick="switchTab('clock')"   id="tab-clock">⏱ Clock</button>
     <button role="tab"               onclick="switchTab('history')" id="tab-history">📋 Logs</button>
-    <button role="tab"               onclick="switchTab('admin')"   id="tab-admin">⚙ Admin</button>
+    <button role="tab" style="display:none;" onclick="switchTab('admin')" id="tab-admin">⚙ Admin</button>
   </nav>
 
   <div id="connection-banner">
@@ -618,19 +618,7 @@
   <!-- ═══════════ ADMIN SCREEN ═══════════ -->
   <section class="screen" id="screen-admin">
 
-    <!-- Auth wall -->
-    <div id="admin-auth-panel">
-      <div class="card">
-        <div class="card-title">Admin Access</div>
-        <label for="admin-tab-code">Admin passcode</label>
-        <input type="password" id="admin-tab-code" placeholder="Enter passcode…" autocomplete="off"
-               onkeydown="if(event.key==='Enter') adminTabUnlock()" />
-        <button class="btn btn-submit" id="admin-unlock-btn" onclick="adminTabUnlock()">Unlock</button>
-      </div>
-    </div>
-
-    <!-- Content (shown when admin verified) -->
-    <div id="admin-projects-panel" style="display:none;">
+    <div id="admin-projects-panel">
 
       <!-- Categories card -->
       <div class="card">
@@ -820,6 +808,7 @@
 
     initTheme();
     updateWorkerDisplay();
+    updateAdminTabVisibility();
     toggleCurrentWeek(); // default to current week on startup
     if (!workerName) setTimeout(openWorkerModal, 600);
 
@@ -889,37 +878,16 @@
   let adminCatFilter = "";
   let adminExtraCats = [];
 
-  async function loadAdminScreen() {
-    if (!adminCode) {
-      document.getElementById("admin-auth-panel").style.display    = "";
-      document.getElementById("admin-projects-panel").style.display = "none";
-      setTimeout(() => document.getElementById("admin-tab-code").focus(), 200);
-      return;
+  function updateAdminTabVisibility() {
+    const show = !!adminCode;
+    document.getElementById("tab-admin").style.display = show ? "" : "none";
+    if (!show && document.getElementById("screen-admin").classList.contains("active")) {
+      switchTab("clock");
     }
-    document.getElementById("admin-auth-panel").style.display    = "none";
-    document.getElementById("admin-projects-panel").style.display = "";
-    await refreshAdminProjects();
   }
 
-  async function adminTabUnlock() {
-    const code = document.getElementById("admin-tab-code").value.trim();
-    if (!code) return;
-    const btn = document.getElementById("admin-unlock-btn");
-    btn.textContent = "Checking…"; btn.disabled = true;
-    try {
-      const { error } = await sb.rpc("get_worker_rates", { admin_code: code });
-      if (error) throw error;
-      adminCode   = code;
-      isAdminMode = true;
-      document.getElementById("admin-tab-code").value = "";
-      document.getElementById("admin-auth-panel").style.display    = "none";
-      document.getElementById("admin-projects-panel").style.display = "";
-      await refreshAdminProjects();
-    } catch (_) {
-      alert("Incorrect passcode.");
-    } finally {
-      btn.textContent = "Unlock"; btn.disabled = false;
-    }
+  async function loadAdminScreen() {
+    await refreshAdminProjects();
   }
 
   async function refreshAdminProjects() {
@@ -1167,6 +1135,7 @@
     else      { localStorage.removeItem("ft_admin_code"); }
 
     updateWorkerDisplay();
+    updateAdminTabVisibility();
     closeWorkerModal();
     toast("Saved! 👋", "success");
 
