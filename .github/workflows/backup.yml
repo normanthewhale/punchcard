@@ -1,0 +1,58 @@
+name: Backup Supabase Data
+
+on:
+  schedule:
+    - cron: '0 8,20 * * *'  # 8am and 8pm UTC daily
+  workflow_dispatch:          # Allow manual trigger
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Export time logs to CSV
+        run: |
+          mkdir -p backup
+
+          # Fetch all time logs ordered by submitted_at
+          curl -s \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/time_logs?select=id,worker_name,category,project,start_time,end_time,duration_hrs,description,submitted_at&order=submitted_at.asc" \
+            -H "apikey: ${{ secrets.SUPABASE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY }}" \
+            -H "Accept: text/csv" \
+            -o backup/time_logs.csv
+
+          # Fetch workers
+          curl -s \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/workers?select=name,rate_type,rate_amount&order=name.asc" \
+            -H "apikey: ${{ secrets.SUPABASE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY }}" \
+            -H "Accept: text/csv" \
+            -o backup/workers.csv
+
+          # Fetch projects
+          curl -s \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/projects?select=name,category&order=name.asc" \
+            -H "apikey: ${{ secrets.SUPABASE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY }}" \
+            -H "Accept: text/csv" \
+            -o backup/projects.csv
+
+          echo "Rows in time_logs: $(tail -n +2 backup/time_logs.csv | wc -l)"
+          echo "Rows in workers:   $(tail -n +2 backup/workers.csv   | wc -l)"
+          echo "Rows in projects:  $(tail -n +2 backup/projects.csv  | wc -l)"
+
+      - name: Commit backup
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add backup/
+          if git diff --staged --quiet; then
+            echo "No changes to backup."
+          else
+            git commit -m "chore: backup data [skip ci]"
+            git push
+          fi
