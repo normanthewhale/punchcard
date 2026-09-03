@@ -379,14 +379,8 @@
     .admin-cat-edit-btn { background:none; border:none; color:var(--text3); font-size:13px; font-weight:500; padding:4px 8px; border-radius:6px; cursor:pointer; flex-shrink:0; }
     .admin-cat-edit-btn:hover { color:var(--orange); background:rgba(232,119,58,0.08); }
     .admin-cat-rename-row { display:flex; gap:8px; align-items:center; padding:4px 0; }
-    /* Category filter pills */
-    .admin-cat-pills { display:flex; gap:6px; overflow-x:auto; padding-bottom:2px; -webkit-overflow-scrolling:touch; }
-    .admin-cat-pills::-webkit-scrollbar { display:none; }
-    .admin-cat-pill {
-      flex-shrink:0; padding:5px 12px; border-radius:20px; font-size:12px; font-weight:600;
-      cursor:pointer; background:var(--bg3); border:1px solid var(--border); color:var(--text2); transition:all .15s;
-    }
-    .admin-cat-pill.active { background:var(--orange); border-color:var(--orange); color:#fff; }
+    /* Category filter dropdown */
+    #admin-cat-filter { margin-bottom:8px; font-size:14px; padding:9px 12px; }
     /* Compact project rows */
     .admin-proj-list { display:flex; flex-direction:column; }
     .admin-proj-row { display:flex; align-items:center; gap:6px; padding:6px 6px; border-radius:8px; }
@@ -647,7 +641,7 @@
         <input type="search" id="admin-search" placeholder="Search projects…"
                oninput="renderAdminProjects()"
                style="margin-top:10px;margin-bottom:8px;font-size:14px;padding:9px 12px;" />
-        <div id="admin-cat-pills" class="admin-cat-pills" style="margin-bottom:8px;"></div>
+        <select id="admin-cat-filter" onchange="adminSetCatFilter(this.value)"></select>
         <div id="admin-add-proj-box" class="admin-form-box adding" style="display:none;margin-bottom:6px;">
           <label>Project name</label>
           <input type="text" id="admin-add-name" placeholder="e.g. 123 Main St" />
@@ -943,11 +937,9 @@
       if (el) { el.focus(); el.select(); }
     }, 30);
 
-    const pills = document.getElementById("admin-cat-pills");
-    pills.innerHTML =
-      `<button class="admin-cat-pill${adminCatFilter === "" ? " active" : ""}" onclick="adminSetCatFilter('')">All</button>` +
-      cats.map(cat => `<button class="admin-cat-pill${adminCatFilter === cat ? " active" : ""}" onclick="adminSetCatFilter('${esc(cat).replace(/'/g,"\\'")}')">` +
-        `${esc(cat)}</button>`).join("");
+    const sel = document.getElementById("admin-cat-filter");
+    sel.innerHTML = `<option value="">All categories</option>` +
+      cats.map(cat => `<option value="${esc(cat)}"${adminCatFilter === cat ? " selected" : ""}>${esc(cat)}</option>`).join("");
   }
 
   function adminStartRenameCat(cat) { adminEditCat = cat; renderAdminCategories(); }
