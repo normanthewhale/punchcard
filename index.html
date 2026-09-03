@@ -368,6 +368,48 @@
     .rate-row > div:first-child { flex: 0 0 120px; }
     .rate-row > div:last-child { flex: 1; }
 
+    /* ── Admin screen ── */
+    .admin-proj-list { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+    .admin-proj-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 12px; background: var(--bg3); border-radius: 10px;
+    }
+    .admin-proj-info { flex: 1; min-width: 0; }
+    .admin-proj-name { font-size: 14px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .admin-proj-cat  { font-size: 11px; color: var(--text3); margin-top: 2px; }
+    .admin-proj-edit-btn {
+      background: none; border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text2); font-size: 13px; font-weight: 500;
+      padding: 5px 10px; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+      transition: border-color .15s, color .15s;
+    }
+    .admin-proj-edit-btn:hover { border-color: var(--orange); color: var(--orange); }
+    .admin-proj-del-btn {
+      background: none; border: none; color: var(--text3);
+      font-size: 18px; cursor: pointer; padding: 4px 6px; line-height: 1;
+      border-radius: 6px; flex-shrink: 0;
+    }
+    .admin-proj-del-btn:hover { color: var(--red); background: rgba(224,84,84,0.1); }
+    .admin-edit-row {
+      background: var(--bg3); border: 1px solid var(--orange); border-radius: 10px; padding: 14px;
+    }
+    .admin-edit-row label, .admin-add-box label { margin-bottom: 6px; }
+    .admin-edit-row input, .admin-add-box input { margin-bottom: 12px; }
+    .admin-edit-btns { display: flex; gap: 8px; }
+    .admin-edit-save {
+      flex: 1; padding: 10px; background: var(--orange); color: #fff;
+      border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    .admin-edit-cancel {
+      padding: 10px 14px; background: var(--bg2); color: var(--text2);
+      border: 1px solid var(--border); border-radius: 10px; font-size: 14px; font-weight: 500; cursor: pointer;
+    }
+    .admin-add-box {
+      background: var(--bg3); border: 1px solid var(--green); border-radius: 10px;
+      padding: 14px; margin-top: 14px;
+    }
+    .admin-add-box input { margin-bottom: 12px; }
+
   </style>
 </head>
 <body>
@@ -409,6 +451,7 @@
   <nav role="tablist">
     <button role="tab" class="active" onclick="switchTab('clock')"   id="tab-clock">⏱ Clock</button>
     <button role="tab"               onclick="switchTab('history')" id="tab-history">📋 Logs</button>
+    <button role="tab"               onclick="switchTab('admin')"   id="tab-admin">⚙ Admin</button>
   </nav>
 
   <div id="connection-banner">
@@ -571,6 +614,46 @@
       <button class="btn-page" id="btn-prev" onclick="changePage(-1)">← Prev</button>
       <span class="page-info" id="page-info"></span>
       <button class="btn-page" id="btn-next" onclick="changePage(1)">Next →</button>
+    </div>
+
+  </section>
+
+  <!-- ═══════════ ADMIN SCREEN ═══════════ -->
+  <section class="screen" id="screen-admin">
+
+    <!-- Auth wall -->
+    <div id="admin-auth-panel">
+      <div class="card">
+        <div class="card-title">Admin Access</div>
+        <label for="admin-tab-code">Admin passcode</label>
+        <input type="password" id="admin-tab-code" placeholder="Enter passcode…" autocomplete="off"
+               onkeydown="if(event.key==='Enter') adminTabUnlock()" />
+        <button class="btn btn-submit" id="admin-unlock-btn" onclick="adminTabUnlock()">Unlock</button>
+      </div>
+    </div>
+
+    <!-- Project management -->
+    <div id="admin-projects-panel" style="display:none;">
+      <div class="card">
+        <div class="card-title" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0;">
+          Projects
+          <button class="btn-add-split" style="width:auto; padding:6px 14px; margin:0; font-size:13px;" onclick="adminStartAdd()">＋ Add</button>
+        </div>
+
+        <div id="admin-add-box" class="admin-add-box" style="display:none;">
+          <label>Project name</label>
+          <input type="text" id="admin-add-name" placeholder="e.g. 123 Main St" />
+          <label>Category</label>
+          <input type="text" id="admin-add-cat" list="admin-cat-list" placeholder="e.g. Rental" style="margin-bottom:0;" />
+          <datalist id="admin-cat-list"></datalist>
+          <div class="admin-edit-btns" style="margin-top:12px;">
+            <button class="admin-edit-save" onclick="adminSaveAdd()">Save</button>
+            <button class="admin-edit-cancel" onclick="adminCancelAdd()">Cancel</button>
+          </div>
+        </div>
+
+        <div id="admin-proj-list" class="admin-proj-list"></div>
+      </div>
     </div>
 
   </section>
@@ -776,6 +859,160 @@
     document.getElementById("screen-" + tab).classList.add("active");
     document.getElementById("tab-" + tab).classList.add("active");
     if (tab === "history") loadHistory();
+    if (tab === "admin")   loadAdminScreen();
+  }
+
+  // ── Admin tab ─────────────────────────────────────────────────────────────
+  let adminProjects = [];
+  let adminEditId   = null;
+
+  async function loadAdminScreen() {
+    if (!adminCode) {
+      document.getElementById("admin-auth-panel").style.display   = "";
+      document.getElementById("admin-projects-panel").style.display = "none";
+      setTimeout(() => document.getElementById("admin-tab-code").focus(), 200);
+      return;
+    }
+    document.getElementById("admin-auth-panel").style.display    = "none";
+    document.getElementById("admin-projects-panel").style.display = "";
+    await refreshAdminProjects();
+  }
+
+  async function adminTabUnlock() {
+    const code = document.getElementById("admin-tab-code").value.trim();
+    if (!code) return;
+    const btn = document.getElementById("admin-unlock-btn");
+    btn.textContent = "Checking…"; btn.disabled = true;
+    try {
+      const { error } = await sb.rpc("get_worker_rates", { admin_code: code });
+      if (error) throw error;
+      adminCode   = code;
+      isAdminMode = true;
+      document.getElementById("admin-tab-code").value = "";
+      document.getElementById("admin-auth-panel").style.display    = "none";
+      document.getElementById("admin-projects-panel").style.display = "";
+      await refreshAdminProjects();
+    } catch (_) {
+      alert("Incorrect passcode.");
+    } finally {
+      btn.textContent = "Unlock"; btn.disabled = false;
+    }
+  }
+
+  async function refreshAdminProjects() {
+    try {
+      const res = await apiFetch({ action: "getProjects" });
+      adminProjects = res.projects;
+      renderAdminProjects();
+      rebuildCatDatalist();
+    } catch (err) {
+      alert("Could not load projects: " + err.message);
+    }
+  }
+
+  function rebuildCatDatalist() {
+    const cats = [...new Set(adminProjects.map(p => p.category))].sort();
+    document.getElementById("admin-cat-list").innerHTML =
+      cats.map(c => `<option value="${esc(c)}">`).join("");
+  }
+
+  function renderAdminProjects() {
+    const list = document.getElementById("admin-proj-list");
+    if (!adminProjects.length) {
+      list.innerHTML = '<p style="color:var(--text3);font-size:14px;margin-top:12px;">No projects yet.</p>';
+      return;
+    }
+    list.innerHTML = adminProjects.map(p => {
+      if (p.id === adminEditId) return `
+        <div class="admin-edit-row" id="apr-${p.id}">
+          <label>Project name</label>
+          <input type="text" id="edit-name-${p.id}" value="${esc(p.name)}" />
+          <label>Category</label>
+          <input type="text" id="edit-cat-${p.id}" value="${esc(p.category)}" list="admin-cat-list" style="margin-bottom:0;" />
+          <div class="admin-edit-btns" style="margin-top:12px;">
+            <button class="admin-edit-save" onclick="adminSaveEdit('${p.id}')">Save</button>
+            <button class="admin-edit-cancel" onclick="adminCancelEdit()">Cancel</button>
+          </div>
+        </div>`;
+      return `<div class="admin-proj-row" id="apr-${p.id}">
+        <div class="admin-proj-info">
+          <div class="admin-proj-name">${esc(p.name)}</div>
+          <div class="admin-proj-cat">${esc(p.category)}</div>
+        </div>
+        <button class="admin-proj-edit-btn" onclick="adminStartEdit('${p.id}')">Edit</button>
+        <button class="admin-proj-del-btn" title="Delete" onclick="adminDeleteProject('${p.id}')">✕</button>
+      </div>`;
+    }).join("");
+  }
+
+  function adminStartAdd() {
+    adminEditId = null;
+    renderAdminProjects();
+    const box = document.getElementById("admin-add-box");
+    box.style.display = "";
+    document.getElementById("admin-add-name").value = "";
+    document.getElementById("admin-add-cat").value  = "";
+    setTimeout(() => document.getElementById("admin-add-name").focus(), 50);
+  }
+
+  function adminCancelAdd() {
+    document.getElementById("admin-add-box").style.display = "none";
+  }
+
+  async function adminSaveAdd() {
+    const name = document.getElementById("admin-add-name").value.trim();
+    const cat  = document.getElementById("admin-add-cat").value.trim();
+    if (!name || !cat) { alert("Name and category are required."); return; }
+    try {
+      await apiFetch({ action: "addProject", adminCode, projectName: name, projectCategory: cat });
+      document.getElementById("admin-add-box").style.display = "none";
+      await refreshAdminProjects();
+      fetchProjects();
+    } catch (err) {
+      alert("Could not add project: " + err.message);
+    }
+  }
+
+  function adminStartEdit(id) {
+    adminEditId = id;
+    document.getElementById("admin-add-box").style.display = "none";
+    renderAdminProjects();
+    setTimeout(() => {
+      const el = document.getElementById("edit-name-" + id);
+      if (el) el.focus();
+    }, 50);
+  }
+
+  function adminCancelEdit() {
+    adminEditId = null;
+    renderAdminProjects();
+  }
+
+  async function adminSaveEdit(id) {
+    const name = document.getElementById("edit-name-" + id).value.trim();
+    const cat  = document.getElementById("edit-cat-"  + id).value.trim();
+    if (!name || !cat) { alert("Name and category are required."); return; }
+    try {
+      await apiFetch({ action: "updateProject", adminCode, projectId: id, projectName: name, projectCategory: cat });
+      adminEditId = null;
+      await refreshAdminProjects();
+      fetchProjects();
+    } catch (err) {
+      alert("Could not save: " + err.message);
+    }
+  }
+
+  async function adminDeleteProject(id) {
+    const proj = adminProjects.find(p => p.id === id);
+    const name = proj ? proj.name : id;
+    if (!confirm(`Delete "${name}"?\n\nThis cannot be undone.`)) return;
+    try {
+      await apiFetch({ action: "deleteProject", adminCode, projectId: id });
+      await refreshAdminProjects();
+      fetchProjects();
+    } catch (err) {
+      alert("Could not delete: " + err.message);
+    }
   }
 
   // ── Worker name ───────────────────────────────────────────────────────────
@@ -1780,7 +2017,7 @@
 
     // ── Get projects ──────────────────────────────────────────────────────────
     if (action === "getProjects") {
-      const { data, error } = await sb.from("projects").select("name, category").order("name");
+      const { data, error } = await sb.from("projects").select("id, name, category").order("name");
       if (error) throw new Error(error.message);
       return { projects: data };
     }
@@ -1880,6 +2117,31 @@
       const { data, error } = await sb.from("workers").select("name").order("name");
       if (error) throw new Error(error.message);
       return { workers: data.map(w => w.name) };
+    }
+
+    if (action === "addProject") {
+      const { data, error } = await sb.rpc("add_project", {
+        admin_code: params.adminCode, project_name: params.projectName, project_category: params.projectCategory
+      });
+      if (error) throw new Error(error.message);
+      return data;
+    }
+
+    if (action === "updateProject") {
+      const { data, error } = await sb.rpc("update_project", {
+        admin_code: params.adminCode, project_id: params.projectId,
+        project_name: params.projectName, project_category: params.projectCategory
+      });
+      if (error) throw new Error(error.message);
+      return data;
+    }
+
+    if (action === "deleteProject") {
+      const { data, error } = await sb.rpc("delete_project", {
+        admin_code: params.adminCode, project_id: params.projectId
+      });
+      if (error) throw new Error(error.message);
+      return data;
     }
 
     throw new Error("Unknown action: " + action);
