@@ -368,7 +368,17 @@
     .rate-row > div:first-child { flex: 0 0 120px; }
     .rate-row > div:last-child { flex: 1; }
 
+    /* ── Manual time entry ── */
+    .dur-row { display:flex; align-items:center; gap:8px; margin-bottom:16px; }
+    .dur-row select { flex:1; margin-bottom:0; }
+    .dur-unit { font-size:14px; color:var(--text2); flex-shrink:0; }
+    #m-desc { min-height:70px; }
+
     /* ── Admin screen ── */
+    .admin-hint { font-size:12px; color:var(--text3); margin:6px 0 8px; line-height:1.4; }
+    .admin-worker-row { display:flex; align-items:center; gap:8px; padding:6px; border-radius:8px; }
+    .admin-worker-row:hover { background:var(--bg3); }
+    .admin-worker-row select { width:auto; margin-bottom:0; font-size:13px; padding:7px 10px; flex-shrink:0; }
     .admin-section-hd { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
     /* Category list */
     .admin-cat-list { display:flex; flex-direction:column; }
@@ -468,7 +478,7 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="timer-card">
       <div class="card-title">Timer</div>
       <div class="timer-wrap">
         <div class="timer-clock" id="timer-clock">00:00:00</div>
@@ -479,6 +489,33 @@
       <button class="btn btn-start" id="btn-start" onclick="startTimer()">Clock In</button>
       <button class="btn btn-pause" id="btn-pause" onclick="togglePause()" style="display:none; margin-top:10px;">⏸ &nbsp;Pause</button>
       <button class="btn btn-stop"  id="btn-stop"  onclick="stopTimer()" style="display:none; margin-top:10px;">Clock Out</button>
+    </div>
+
+    <!-- Manual time entry (replaces the timer for workers set to manual mode) -->
+    <div class="card" id="manual-card" style="display:none;">
+      <div class="card-title">Log Time</div>
+
+      <label for="m-date">Date</label>
+      <input type="date" id="m-date" onchange="this.dataset.touched='1'" />
+
+      <label>Time spent</label>
+      <div class="dur-row">
+        <select id="m-hours" aria-label="Hours"></select>
+        <span class="dur-unit">hr</span>
+        <select id="m-mins" aria-label="Minutes"></select>
+        <span class="dur-unit">min</span>
+      </div>
+
+      <label for="m-cat">Category</label>
+      <select id="m-cat" onchange="onManualCatChange()"></select>
+
+      <label for="m-proj">House / Project</label>
+      <select id="m-proj"></select>
+
+      <label for="m-desc">Note (optional)</label>
+      <textarea id="m-desc" rows="2" placeholder="e.g. Tenant phone call…"></textarea>
+
+      <button class="btn btn-submit" id="btn-manual-submit" onclick="submitManual()">Save Entry</button>
     </div>
 
     <!-- Log entry form (shown after clock-out) -->
@@ -613,6 +650,15 @@
   <section class="screen" id="screen-admin">
 
     <div id="admin-projects-panel">
+
+      <!-- Workers card -->
+      <div class="card">
+        <div class="admin-section-hd">
+          <span class="card-title" style="margin-bottom:0;">Workers</span>
+        </div>
+        <p class="admin-hint">Timer = clock in/out. Manual = enters time spent by hand (for short tasks). A worker appears here after saving their profile in the app.</p>
+        <div id="admin-worker-list"></div>
+      </div>
 
       <!-- Categories card -->
       <div class="card">
@@ -778,6 +824,7 @@
   let rateType     = localStorage.getItem("ft_rate_type")   || "hourly";
   let rateAmount   = parseFloat(localStorage.getItem("ft_rate_amount") || "0");
   let weekStartDay = parseInt(localStorage.getItem("ft_week_start_day") || "1", 10);
+  let entryMode    = localStorage.getItem("ft_entry_mode") || "timer"; // "timer" | "manual", set per worker by admin
 
   // ── Summary / report state ────────────────────────────────────────────────
   let workerRates     = {};
@@ -803,6 +850,7 @@
     initTheme();
     updateWorkerDisplay();
     updateAdminTabVisibility();
+    initManualForm();
     toggleCurrentWeek(); // default to current week on startup
     if (!workerName) setTimeout(openWorkerModal, 600);
 
@@ -838,6 +886,14 @@
         localStorage.removeItem("ft_timer_total_paused");
       }
     }
+
+    applyEntryMode();
+    fetchEntryMode();
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState !== "visible") return;
+      fetchEntryMode();
+      refreshManualDate();
+    });
   });
 
   // ── Theme ─────────────────────────────────────────────────────────────────
@@ -881,7 +937,53 @@
   }
 
   async function loadAdminScreen() {
-    await refreshAdminProjects();
+    await Promise.all([refreshAdminProjects(), refreshAdminWorkers()]);
+  }
+
+  // ── Workers (entry mode) ──────────────────────────────────────────────────
+  let adminWorkers = [];
+
+  async function refreshAdminWorkers() {
+    try {
+      const res = await apiFetch({ action: "getWorkerModes" });
+      adminWorkers = res.workers;
+      renderAdminWorkers();
+    } catch (err) {
+      document.getElementById("admin-worker-list").innerHTML =
+        '<p style="color:var(--text3);font-size:13px;padding:4px 6px;">Could not load workers.</p>';
+    }
+  }
+
+  function renderAdminWorkers() {
+    const list = document.getElementById("admin-worker-list");
+    if (!adminWorkers.length) {
+      list.innerHTML = '<p style="color:var(--text3);font-size:13px;padding:4px 6px;">No workers yet.</p>';
+      return;
+    }
+    list.innerHTML = adminWorkers.map(w => `
+      <div class="admin-worker-row">
+        <span class="admin-proj-name">${esc(w.name)}</span>
+        <select data-name="${esc(w.name)}" onchange="adminSetWorkerMode(this)">
+          <option value="timer"${w.entry_mode !== "manual" ? " selected" : ""}>Timer</option>
+          <option value="manual"${w.entry_mode === "manual" ? " selected" : ""}>Manual entry</option>
+        </select>
+      </div>`).join("");
+  }
+
+  async function adminSetWorkerMode(el) {
+    const name = el.dataset.name, mode = el.value;
+    el.disabled = true;
+    try {
+      await apiFetch({ action: "setWorkerEntryMode", adminCode, workerName: name, mode });
+      const w = adminWorkers.find(x => x.name === name);
+      if (w) w.entry_mode = mode;
+      toast(`${name}: ${mode === "manual" ? "manual entry" : "timer"}`, "success");
+    } catch (err) {
+      toast("Could not update: " + err.message, "error");
+      renderAdminWorkers();
+    } finally {
+      el.disabled = false;
+    }
   }
 
   async function refreshAdminProjects() {
@@ -1132,7 +1234,8 @@
     toast("Saved! 👋", "success");
 
     apiFetch({ action: "saveWorkerRate", workerName: val, rateType: rType, rateAmount: rAmt })
-      .catch(err => console.warn("Rate sync failed:", err));
+      .catch(err => console.warn("Rate sync failed:", err))
+      .then(fetchEntryMode);
 
     if (document.getElementById("screen-history").classList.contains("active")) {
       loadHistory();
@@ -1167,6 +1270,7 @@
     // f-category no longer exists as a static element (replaced by dynamic split rows)
     // Re-render open split rows if categories update while form is visible
     if (splits.length > 0) renderSplits();
+    renderManualCategories();
   }
 
   function populateFilterCategoryDropdown() {
@@ -1182,6 +1286,126 @@
     const names = [...new Set(allProjects.map(p => p.name))];
     sel.innerHTML = '<option value="">All projects</option>' +
       names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+  }
+
+  // ── Entry mode (timer vs manual, set per worker by admin) ────────────────
+  function applyEntryMode() {
+    // Never hide the timer while a session is running or awaiting submit
+    const manual = entryMode === "manual" && !startTimestamp;
+    document.getElementById("timer-card").style.display  = manual ? "none" : "";
+    document.getElementById("manual-card").style.display = manual ? "" : "none";
+  }
+
+  async function fetchEntryMode() {
+    if (!workerName) return;
+    try {
+      const res = await apiFetch({ action: "getEntryMode", workerName });
+      entryMode = res.mode === "manual" ? "manual" : "timer";
+      localStorage.setItem("ft_entry_mode", entryMode);
+      applyEntryMode();
+    } catch (err) {
+      console.warn("Entry mode fetch failed:", err);
+    }
+  }
+
+  // ── Manual time entry ─────────────────────────────────────────────────────
+  function localDateStr(d = new Date()) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  function initManualForm() {
+    document.getElementById("m-hours").innerHTML =
+      Array.from({ length: 13 }, (_, h) => `<option value="${h}">${h}</option>`).join("");
+    document.getElementById("m-mins").innerHTML =
+      Array.from({ length: 60 }, (_, m) => `<option value="${m}">${String(m).padStart(2, "0")}</option>`).join("");
+    renderManualCategories();
+    resetManualForm();
+  }
+
+  function resetManualForm() {
+    const dateEl = document.getElementById("m-date");
+    delete dateEl.dataset.touched;
+    refreshManualDate();
+    document.getElementById("m-hours").value = "0";
+    document.getElementById("m-mins").value  = "5";
+    document.getElementById("m-cat").value   = "";
+    fillManualProjects("");
+    document.getElementById("m-desc").value  = "";
+  }
+
+  function refreshManualDate() {
+    const el    = document.getElementById("m-date");
+    const today = localDateStr();
+    el.max = today;
+    if (!el.dataset.touched) el.value = today;
+  }
+
+  function renderManualCategories() {
+    const sel      = document.getElementById("m-cat");
+    const prevCat  = sel.value;
+    const prevProj = document.getElementById("m-proj").value;
+    const cats     = uniqueCategories();
+    sel.innerHTML = `<option value="">Select a category…</option>` +
+      cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
+    if (prevCat && cats.includes(prevCat)) sel.value = prevCat;
+    fillManualProjects(prevProj);
+  }
+
+  function onManualCatChange() { fillManualProjects(""); }
+
+  function fillManualProjects(selected) {
+    const cat   = document.getElementById("m-cat").value;
+    const projs = cat ? allProjects.filter(p => p.category === cat) : [];
+    document.getElementById("m-proj").innerHTML = !cat
+      ? `<option value="">Select a category first…</option>`
+      : projs.length
+        ? `<option value="">Select a project…</option>` +
+          projs.map(p => `<option value="${esc(p.name)}"${p.name === selected ? " selected" : ""}>${esc(p.name)}</option>`).join("")
+        : `<option value="">No projects in this category</option>`;
+  }
+
+  async function submitManual() {
+    if (!workerName) { openWorkerModal(); return; }
+
+    const cat     = document.getElementById("m-cat").value;
+    const proj    = document.getElementById("m-proj").value;
+    const mins    = parseInt(document.getElementById("m-hours").value, 10) * 60 +
+                    parseInt(document.getElementById("m-mins").value, 10);
+    const dateStr = document.getElementById("m-date").value || localDateStr();
+    const desc    = document.getElementById("m-desc").value.trim();
+
+    if (!cat)  { toast("Select a category.", "error"); return; }
+    if (!proj) { toast("Select a project.",  "error"); return; }
+    if (!mins) { toast("Set the time spent.", "error"); return; }
+    if (dateStr > localDateStr()) { toast("Date can't be in the future.", "error"); return; }
+
+    // Anchor the entry to the chosen date at the current time of day, ending "now"
+    const [y, mo, d] = dateStr.split("-").map(Number);
+    const now   = new Date();
+    const end   = new Date(y, mo - 1, d, now.getHours(), now.getMinutes(), 0, 0);
+    const start = new Date(end.getTime() - mins * 60000);
+
+    const btn = document.getElementById("btn-manual-submit");
+    btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      const res = await apiFetch({
+        action: "logTime", workerName,
+        category: cat, project: proj,
+        startTime: start.toISOString(), endTime: end.toISOString(),
+        description: desc, pausedMs: 0, overrideDuration: mins / 60
+      });
+      if (res.success) {
+        toast("✅ Logged " + fmtHours(parseFloat(res.duration) || 0) + " — " + proj, "success");
+        resetManualForm();
+      } else {
+        toast("Error: " + (res.error || "Unknown"), "error");
+      }
+    } catch (err) {
+      toast("Could not reach server. Check connection.", "error");
+      console.error("submitManual error:", err);
+    } finally {
+      btn.disabled = false; btn.textContent = "Save Entry";
+    }
   }
 
   // ── Split time (log entry form) ──────────────────────────────────────────
@@ -1566,6 +1790,7 @@
     splits = []; totalWorkedHrs = 0;
     startTimestamp = null; endTimestamp = null;
     isPaused = false; pauseStart = null; totalPausedMs = 0;
+    applyEntryMode();
   }
 
   function recalcDuration() {
@@ -1700,6 +1925,7 @@
     splits = []; totalWorkedHrs = 0;
     startTimestamp = null; endTimestamp = null;
     isPaused = false; pauseStart = null; totalPausedMs = 0;
+    applyEntryMode();
   }
 
   // ── History ───────────────────────────────────────────────────────────────
@@ -2181,6 +2407,26 @@
       const { data, error } = await sb.from("workers").select("name").order("name");
       if (error) throw new Error(error.message);
       return { workers: data.map(w => w.name) };
+    }
+
+    if (action === "getEntryMode") {
+      const { data, error } = await sb.from("workers").select("entry_mode").eq("name", params.workerName).maybeSingle();
+      if (error) throw new Error(error.message);
+      return { mode: (data && data.entry_mode) || "timer" };
+    }
+
+    if (action === "getWorkerModes") {
+      const { data, error } = await sb.from("workers").select("name, entry_mode").order("name");
+      if (error) throw new Error(error.message);
+      return { workers: data };
+    }
+
+    if (action === "setWorkerEntryMode") {
+      const { data, error } = await sb.rpc("set_worker_entry_mode", {
+        admin_code: params.adminCode, worker_name: params.workerName, mode: params.mode
+      });
+      if (error) throw new Error(error.message);
+      return data;
     }
 
     if (action === "addProject") {
