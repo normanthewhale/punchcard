@@ -379,6 +379,25 @@
     .admin-worker-row { display:flex; align-items:center; gap:8px; padding:6px; border-radius:8px; }
     .admin-worker-row:hover { background:var(--bg3); }
     .admin-worker-row select { width:auto; margin-bottom:0; font-size:13px; padding:7px 10px; flex-shrink:0; }
+
+    /* ── Payroll / paid status ── */
+    .pay-summary-box { background:var(--bg3); border-radius:10px; padding:12px; font-size:13px; line-height:1.55; color:var(--text2); margin-bottom:12px; }
+    .pay-summary-box strong { color:var(--text); }
+    .payout-row { display:flex; align-items:center; gap:8px; padding:8px 6px; border-radius:8px; }
+    .payout-row:hover { background:var(--bg3); }
+    .payout-main { flex:1; min-width:0; }
+    .payout-top { font-size:13px; font-weight:600; color:var(--text); }
+    .payout-sub { font-size:11px; color:var(--text3); margin-top:2px; word-break:break-word; }
+    .payout-undo-btn { flex-shrink:0; background:none; border:1px solid var(--border); border-radius:8px; color:var(--text2); font-size:13px; font-weight:500; padding:5px 10px; cursor:pointer; transition:border-color .15s, color .15s; }
+    .payout-undo-btn:hover { border-color:var(--red); color:var(--red); }
+    .pay-badge { display:inline-block; font-size:10px; font-weight:600; padding:2px 7px; border-radius:10px; border:1px solid var(--border); color:var(--text3); margin-left:6px; vertical-align:middle; }
+    .pay-badge.unpaid { color:var(--orange); border-color:var(--orange); }
+    .pay-badge.paid   { color:var(--green); border-color:var(--green); }
+    .log-locked { font-size:12px; color:var(--text3); padding:4px 8px; }
+    .unpaid-banner { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:12px 16px; margin-bottom:16px; font-size:14px; color:var(--text2); cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:8px; }
+    .unpaid-banner strong { color:var(--orange); }
+    .unpaid-banner.clear strong { color:var(--green); }
+    .unpaid-banner .hint { font-size:12px; color:var(--text3); flex-shrink:0; }
     .admin-section-hd { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
     /* Category list */
     .admin-cat-list { display:flex; flex-direction:column; }
@@ -574,6 +593,9 @@
       </div>
     </div>
 
+    <!-- Unpaid hours (status only, no dollar amounts) -->
+    <div class="unpaid-banner" id="unpaid-banner" style="display:none;" onclick="showUnpaid()"></div>
+
     <!-- Generate Report (above filters) -->
     <button class="btn-summary" id="btn-generate-report" onclick="generateSummary()">📄 Generate Report</button>
 
@@ -616,6 +638,14 @@
             </select>
           </div>
           <div>
+            <label>Pay status</label>
+            <select id="filter-paid" onchange="applyFilters()">
+              <option value="">All</option>
+              <option value="unpaid">Unpaid</option>
+              <option value="paid">Paid</option>
+            </select>
+          </div>
+          <div>
             <label>Sort</label>
             <select id="filter-sort" onchange="applyFilters()">
               <option value="newest">Newest first</option>
@@ -650,6 +680,28 @@
   <section class="screen" id="screen-admin">
 
     <div id="admin-projects-panel">
+
+      <!-- Payroll card -->
+      <div class="card">
+        <div class="admin-section-hd">
+          <span class="card-title" style="margin-bottom:0;">Payroll</span>
+        </div>
+        <label for="pay-worker" style="margin-top:10px;">Worker</label>
+        <select id="pay-worker" onchange="loadPayrollWorker()"></select>
+
+        <div id="pay-summary" class="pay-summary-box">Select a worker to see their unpaid hours.</div>
+
+        <label for="pay-through">Pay through</label>
+        <input type="date" id="pay-through" onchange="renderPayrollSummary()" />
+
+        <label for="pay-note">Note (optional)</label>
+        <input type="text" id="pay-note" placeholder="e.g. Venmo, check #1042" />
+
+        <button class="btn btn-submit" id="btn-mark-paid" onclick="markPaid()" disabled>Mark as paid</button>
+
+        <div class="card-title" style="margin:18px 0 6px;">Payout history</div>
+        <div id="pay-history"><p style="color:var(--text3);font-size:13px;padding:4px 6px;">Select a worker.</p></div>
+      </div>
 
       <!-- Workers card -->
       <div class="card">
@@ -937,7 +989,161 @@
   }
 
   async function loadAdminScreen() {
-    await Promise.all([refreshAdminProjects(), refreshAdminWorkers()]);
+    const t = document.getElementById("pay-through");
+    if (!t.value) t.value = localDateISO(new Date());
+    await Promise.all([refreshAdminProjects(), refreshAdminWorkers(), refreshPayrollRates()]);
+  }
+
+  // ── Payroll ───────────────────────────────────────────────────────────────
+  let payrollEntries = [];   // unpaid entries for the selected worker: { id, start_time, duration_hrs }
+  let payoutHistory  = [];
+  let payrollRates   = {};   // name -> { rateType, rateAmount }
+
+  async function refreshPayrollRates() {
+    try {
+      const res = await apiFetch({ action: "getWorkerRates", adminCode });
+      payrollRates = res.rates || {};
+    } catch (err) { payrollRates = {}; }
+  }
+
+  function populatePayrollWorkers() {
+    const sel  = document.getElementById("pay-worker");
+    const prev = sel.value;
+    sel.innerHTML = `<option value="">Select a worker…</option>` +
+      adminWorkers.map(w => `<option value="${esc(w.name)}">${esc(w.name)}</option>`).join("");
+    if (prev && adminWorkers.some(w => w.name === prev)) sel.value = prev;
+  }
+
+  async function loadPayrollWorker() {
+    const name = document.getElementById("pay-worker").value;
+    payrollEntries = []; payoutHistory = [];
+    renderPayrollSummary();
+    renderPayoutHistory();
+    if (!name) return;
+    document.getElementById("pay-summary").textContent = "Loading…";
+    try {
+      const [un, hist] = await Promise.all([
+        apiFetch({ action: "getUnpaid",  workerName: name }),
+        apiFetch({ action: "getPayouts", adminCode, workerName: name })
+      ]);
+      if (document.getElementById("pay-worker").value !== name) return; // selection changed mid-load
+      payrollEntries = un.entries || [];
+      payoutHistory  = hist.payouts || [];
+    } catch (err) {
+      document.getElementById("pay-summary").textContent = "Could not load payroll data.";
+      return;
+    }
+    renderPayrollSummary();
+    renderPayoutHistory();
+  }
+
+  // Cutoff is the start of the day AFTER the chosen date, so the whole chosen day is included
+  function payrollCutoffMs() {
+    const v = document.getElementById("pay-through").value;
+    if (!v) return null;
+    const [y, m, d] = v.split("-").map(Number);
+    return new Date(y, m - 1, d + 1, 0, 0, 0, 0).getTime();
+  }
+
+  function payrollSelection() {
+    const name   = document.getElementById("pay-worker").value;
+    const cutoff = payrollCutoffMs();
+    const inc    = cutoff === null ? [] : payrollEntries.filter(e => new Date(e.start_time).getTime() < cutoff);
+    const hrs    = inc.reduce((s, e) => s + parseFloat(e.duration_hrs), 0);
+    const rate   = payrollRates[name];
+    let amount = null;
+    if (rate && rate.rateAmount > 0) {
+      const raw = rate.rateType === "daily" ? (hrs / 8) * rate.rateAmount : hrs * rate.rateAmount;
+      amount = Math.round(raw * 100) / 100;
+    }
+    return { name, inc, hrs, amount, rate, later: payrollEntries.length - inc.length };
+  }
+
+  function renderPayrollSummary() {
+    const box = document.getElementById("pay-summary");
+    const btn = document.getElementById("btn-mark-paid");
+    const s   = payrollSelection();
+    btn.disabled = true;
+    if (!s.name) { box.textContent = "Select a worker to see their unpaid hours."; return; }
+    if (!s.inc.length) {
+      box.innerHTML = s.later
+        ? `<strong>Nothing unpaid through this date.</strong><br>${s.later} newer ${s.later === 1 ? "entry is" : "entries are"} still unpaid.`
+        : `<strong>All paid up.</strong> ✓`;
+      return;
+    }
+    const days = s.inc.map(e => localDateISO(new Date(e.start_time))).sort();
+    const range = days[0] === days[days.length - 1]
+      ? formatDateShort(days[0]) : formatDateShort(days[0]) + " – " + formatDateShort(days[days.length - 1]);
+    const rateTxt = s.rate && s.rate.rateAmount > 0
+      ? `${fmtPay(s.rate.rateAmount)}/${s.rate.rateType === "daily" ? "day (8h day)" : "hr"}` : "";
+    box.innerHTML =
+      `<strong>${fmtHours(s.hrs)}</strong> across ${s.inc.length} ${s.inc.length === 1 ? "entry" : "entries"} (${esc(range)})<br>` +
+      (s.amount !== null
+        ? `Amount: <strong>${fmtPay(s.amount)}</strong> at ${esc(rateTxt)}`
+        : `<span style="color:var(--red);">No pay rate set for this worker — amount will record as $0.00.</span>`) +
+      (s.later ? `<br>${s.later} newer ${s.later === 1 ? "entry stays" : "entries stay"} unpaid.` : "");
+    btn.disabled = false;
+  }
+
+  function renderPayoutHistory() {
+    const el = document.getElementById("pay-history");
+    if (!document.getElementById("pay-worker").value) {
+      el.innerHTML = '<p style="color:var(--text3);font-size:13px;padding:4px 6px;">Select a worker.</p>'; return;
+    }
+    if (!payoutHistory.length) {
+      el.innerHTML = '<p style="color:var(--text3);font-size:13px;padding:4px 6px;">No payouts yet.</p>'; return;
+    }
+    const shown = payoutHistory.slice(0, 10);
+    el.innerHTML = shown.map(p => {
+      if (p.historical) return `<div class="payout-row"><div class="payout-main">
+        <div class="payout-top">Paid before payout tracking</div>
+        <div class="payout-sub">${fmtHours(parseFloat(p.hours))} · ${p.entries} entries · through ${formatDateShort(p.through_date)}</div></div></div>`;
+      const paidDay = localDateISO(new Date(p.paid_at));
+      return `<div class="payout-row"><div class="payout-main">
+        <div class="payout-top">${formatDateShort(paidDay)} · ${fmtPay(parseFloat(p.amount))}</div>
+        <div class="payout-sub">${fmtHours(parseFloat(p.hours))} · ${p.entries} ${p.entries === 1 ? "entry" : "entries"} · through ${formatDateShort(p.through_date)}${p.note ? " · " + esc(p.note) : ""}</div></div>
+        <button class="payout-undo-btn" onclick="undoPayout('${p.id}')">Undo</button></div>`;
+    }).join("") + (payoutHistory.length > shown.length
+      ? `<p style="color:var(--text3);font-size:12px;padding:6px;">${payoutHistory.length - shown.length} older payouts not shown.</p>` : "");
+  }
+
+  async function markPaid() {
+    const s = payrollSelection();
+    if (!s.name || !s.inc.length) return;
+    const through = document.getElementById("pay-through").value;
+    const amtTxt  = s.amount === null ? "$0.00 (no rate set)" : fmtPay(s.amount);
+    if (!confirm(`Mark ${s.inc.length} ${s.inc.length === 1 ? "entry" : "entries"} (${fmtHours(s.hrs)}) as paid to ${s.name}?\n\nAmount: ${amtTxt}\nThrough: ${formatDateLong(through)}\n\nYou can undo this from Payout history.`)) return;
+
+    const btn  = document.getElementById("btn-mark-paid");
+    const note = document.getElementById("pay-note");
+    btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      const res = await apiFetch({
+        action: "markPaid", adminCode, workerName: s.name,
+        throughTs: new Date(payrollCutoffMs()).toISOString(), throughDate: through,
+        expectedHours: s.hrs, note: note.value.trim()
+      });
+      toast(`✅ Paid ${fmtHours(parseFloat(res.hours))} — ${fmtPay(parseFloat(res.amount))}`, "success");
+      note.value = "";
+    } catch (err) {
+      toast("Could not mark paid: " + err.message, "error");
+    } finally {
+      btn.textContent = "Mark as paid";
+      await loadPayrollWorker();
+    }
+  }
+
+  async function undoPayout(id) {
+    const p = payoutHistory.find(x => x.id === id);
+    if (!p) return;
+    if (!confirm(`Undo the ${fmtPay(parseFloat(p.amount))} payout from ${formatDateShort(localDateISO(new Date(p.paid_at)))}?\n\nIts ${p.entries} ${p.entries === 1 ? "entry becomes" : "entries become"} unpaid again.`)) return;
+    try {
+      await apiFetch({ action: "undoPayout", adminCode, payoutId: id });
+      toast("Payout undone — entries are unpaid again.", "success");
+    } catch (err) {
+      toast("Could not undo: " + err.message, "error");
+    }
+    await loadPayrollWorker();
   }
 
   // ── Workers (entry mode) ──────────────────────────────────────────────────
@@ -948,6 +1154,7 @@
       const res = await apiFetch({ action: "getWorkerModes" });
       adminWorkers = res.workers;
       renderAdminWorkers();
+      populatePayrollWorkers();
     } catch (err) {
       document.getElementById("admin-worker-list").innerHTML =
         '<p style="color:var(--text3);font-size:13px;padding:4px 6px;">Could not load workers.</p>';
@@ -1943,6 +2150,7 @@
     const list = document.getElementById("history-list");
     list.innerHTML = `<div class="empty"><div class="spinner"></div><p style="margin-top:12px;">Loading…</p></div>`;
     document.getElementById("stats-grid").style.display  = "none";
+    document.getElementById("unpaid-banner").style.display = "none";
     document.getElementById("pagination").style.display  = "none";
     document.getElementById("results-count").textContent = "";
 
@@ -2001,7 +2209,10 @@
     const project = document.getElementById("filter-project").value;
     const cat     = document.getElementById("filter-category").value;
     const worker  = isAdminMode ? document.getElementById("filter-worker").value : "";
+    const paidF   = document.getElementById("filter-paid").value; // "" | "unpaid" | "paid"
     const sort    = document.getElementById("filter-sort").value; // "newest" | "oldest"
+
+    renderUnpaidBanner(worker);
 
     let logs = allLogs.filter(log => {
       const d = normalizeDate(log["Date"]);
@@ -2010,6 +2221,8 @@
       if (project && log["Project"]    !== project) return false;
       if (cat     && log["Category"]   !== cat)     return false;
       if (worker  && log["Worker Name"] !== worker)  return false;
+      if (paidF === "unpaid" &&  log["Payout ID"]) return false;
+      if (paidF === "paid"   && !log["Payout ID"]) return false;
       return true;
     });
 
@@ -2027,6 +2240,34 @@
     filteredLogs = logs;
     currentPage  = 1;
     renderHistory();
+  }
+
+  // Unpaid hours across ALL of a worker's logs (ignores date/project filters); hours only, no dollars
+  function renderUnpaidBanner(worker) {
+    const el     = document.getElementById("unpaid-banner");
+    const pool   = allLogs.filter(l => !worker || l["Worker Name"] === worker);
+    const unpaid = pool.filter(l => !l["Payout ID"]);
+    const hrs    = unpaid.reduce((s, l) => s + parseDuration(l["Duration (hrs)"]), 0);
+    const scope  = (isAdminMode && !worker) ? " (all workers)" : "";
+    el.style.display = "";
+    if (!unpaid.length) {
+      el.className = "unpaid-banner clear";
+      el.innerHTML = `<span><strong>All paid up</strong>${scope} ✓</span>`;
+    } else {
+      el.className = "unpaid-banner";
+      el.innerHTML = `<span><strong>Unpaid${scope}:</strong> ${fmtHours(hrs)} · ${unpaid.length} ${unpaid.length === 1 ? "entry" : "entries"}</span><span class="hint">Tap to view</span>`;
+    }
+  }
+
+  function showUnpaid() {
+    filterCurrentWeek = false;
+    const from = document.getElementById("filter-from");
+    const to   = document.getElementById("filter-to");
+    from.disabled = false; to.disabled = false;
+    from.value = ""; to.value = "";
+    document.getElementById("week-toggle-btn").classList.remove("active");
+    document.getElementById("filter-paid").value = "unpaid";
+    applyFilters();
   }
 
   function toggleCurrentWeek() {
@@ -2072,6 +2313,7 @@
     document.getElementById("filter-project").value  = "";
     document.getElementById("filter-category").value = "";
     document.getElementById("filter-sort").value     = "newest";
+    document.getElementById("filter-paid").value     = "";
     if (isAdminMode) document.getElementById("filter-worker").value = "";
     applyFilters();
   }
@@ -2127,6 +2369,13 @@
         desc:  log["Description"] || ""
       }));
 
+      const isPaid    = !!log["Payout ID"];
+      const paidLabel = log["Paid At"] ? "Paid " + formatDateShort(localDateISO(new Date(log["Paid At"]))) : "Paid";
+      const badge     = isPaid ? `<span class="pay-badge paid">${esc(paidLabel)}</span>` : `<span class="pay-badge unpaid">Unpaid</span>`;
+      const editBtn   = isPaid
+        ? `<span class="log-locked" title="Paid entries are locked">🔒 Locked</span>`
+        : `<button class="btn-edit-log" onclick="openEditModal(decodeURIComponent('${editData}'))">Edit</button>`;
+
       return `<div class="log-item">
         <div class="log-top">
           <div class="log-project">${esc(project)}</div>
@@ -2138,8 +2387,8 @@
         <div class="log-time">${esc(dateLong)} &nbsp;·&nbsp; ${esc(startFmt)} – ${esc(endFmt)}</div>
         ${log["Description"] ? `<div class="log-desc">${esc(log["Description"])}</div>` : ""}
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-          ${workerLine ? `<div class="log-meta">${workerLine}</div>` : "<div></div>"}
-          <button class="btn-edit-log" onclick="openEditModal(decodeURIComponent('${editData}'))">Edit</button>
+          <div class="log-meta">${workerLine}${badge}</div>
+          ${editBtn}
         </div>
       </div>`;
     }).join("");
@@ -2367,7 +2616,9 @@
         "End Time":       r.end_time   ? fmtTime12(new Date(r.end_time))   : "",
         "Duration (hrs)": r.duration_hrs,
         "Description":    r.description,
-        "Submitted At":   r.submitted_at
+        "Submitted At":   r.submitted_at,
+        "Payout ID":      r.payout_id,
+        "Paid At":        r.paid_at
       }));
       return { logs, isAdmin };
     }
@@ -2391,8 +2642,10 @@
         const newDur  = parseFloat(existing.duration_hrs) + deltaMs / 3600000;
         if (newEnd > newStart && newDur > 0) updates.duration_hrs = newDur;
       }
-      const { error } = await sb.from("time_logs").update(updates).eq("id", params.id);
+      // The database only allows updates to unpaid entries; a blocked update matches 0 rows with no error
+      const { data: changed, error } = await sb.from("time_logs").update(updates).eq("id", params.id).select("id");
       if (error) throw new Error(error.message);
+      if (!changed || !changed.length) throw new Error("This entry is paid and locked.");
       return { success: true };
     }
 
@@ -2437,6 +2690,35 @@
       const { data, error } = await sb.rpc("set_worker_entry_mode", {
         admin_code: params.adminCode, worker_name: params.workerName, mode: params.mode
       });
+      if (error) throw new Error(error.message);
+      return data;
+    }
+
+    if (action === "getUnpaid") {
+      const { data, error } = await sb.from("time_logs").select("id, start_time, duration_hrs")
+        .eq("worker_name", params.workerName).is("payout_id", null).order("start_time");
+      if (error) throw new Error(error.message);
+      return { entries: data };
+    }
+
+    if (action === "getPayouts") {
+      const { data, error } = await sb.rpc("get_payouts", { admin_code: params.adminCode, p_worker: params.workerName || null });
+      if (error) throw new Error(error.message);
+      return { payouts: data || [] };
+    }
+
+    if (action === "markPaid") {
+      const { data, error } = await sb.rpc("mark_paid", {
+        admin_code: params.adminCode, p_worker: params.workerName,
+        p_through_ts: params.throughTs, p_through_date: params.throughDate,
+        p_expected_hours: params.expectedHours, p_note: params.note || ""
+      });
+      if (error) throw new Error(error.message);
+      return data;
+    }
+
+    if (action === "undoPayout") {
+      const { data, error } = await sb.rpc("undo_payout", { admin_code: params.adminCode, p_payout: params.payoutId });
       if (error) throw new Error(error.message);
       return data;
     }
@@ -2567,7 +2849,7 @@
         toast("Error: " + (res.error || "Unknown"), "error");
       }
     } catch(err) {
-      toast("Could not reach server.", "error");
+      toast(String(err.message).includes("locked") ? err.message : "Could not reach server.", "error");
     } finally {
       btn.disabled = false; btn.textContent = "Save changes";
     }
