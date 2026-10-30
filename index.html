@@ -1417,6 +1417,9 @@
 
   function timeStrToAbsoluteMs(timeStr) {
     if (!timeStr) return 0;
+    // Snap back to the exact clock-in/out so split boundaries keep the timer's seconds
+    if (timeStr === tsToTimeStr(startTimestamp)) return startTimestamp;
+    if (timeStr === tsToTimeStr(endTimestamp))   return endTimestamp;
     const ref = new Date(startTimestamp);
     const [h, m] = timeStr.split(":").map(Number);
     const d = new Date(ref);
@@ -1797,23 +1800,28 @@
     const s = document.getElementById("f-start").value;
     const e = document.getElementById("f-end").value;
     const el = document.getElementById("calc-duration");
-    if (!s || !e) { el.textContent = "—"; return; }
-    const totalDiff = (timeToDate(e) - timeToDate(s)) / 3600000;
+    if (!s || !e || !startTimestamp || !endTimestamp) { el.textContent = "—"; return; }
+    const totalDiff = (resolveTimeMs(e, endTimestamp) - resolveTimeMs(s, startTimestamp)) / 3600000;
     const breakHrs  = totalPausedMs / 3600000;
     const worked    = totalDiff - breakHrs;
     if (worked <= 0) { el.textContent = "—"; return; }
     el.textContent = fmtHours(worked) + (breakHrs > 0 ? "  (break: " + fmtHours(breakHrs) + ")" : "");
   }
 
-  function timeToDate(timeStr) {
+  // Time inputs hold whole minutes, but the timer measured to the millisecond. A field still
+  // showing the clock-in/out minute resolves to the exact timestamp (no seconds lost); an edited
+  // field resolves to that time on the day nearest the timestamp (correct after midnight).
+  function resolveTimeMs(timeStr, exactMs) {
+    if (timeStr === tsToTimeStr(exactMs)) return exactMs;
     const [h, m] = timeStr.split(":").map(Number);
-    const d = new Date();
-    d.setHours(h, m, 0, 0);
-    return d;
-  }
-
-  function timeInputToISO(timeStr) {
-    return timeToDate(timeStr).toISOString();
+    let best = null;
+    for (const offset of [-1, 0, 1]) {
+      const d = new Date(exactMs);
+      d.setDate(d.getDate() + offset);
+      d.setHours(h, m, 0, 0);
+      if (best === null || Math.abs(d.getTime() - exactMs) < Math.abs(best - exactMs)) best = d.getTime();
+    }
+    return best;
   }
 
   // ── Submit ────────────────────────────────────────────────────────────────
@@ -1825,9 +1833,11 @@
     const startT = document.getElementById("f-start").value;
     const endT   = document.getElementById("f-end").value;
     if (!startT || !endT) { toast("Start and end time required.", "error"); return; }
-    const startISO = timeInputToISO(startT);
-    const endISO   = timeInputToISO(endT);
-    if (new Date(endISO) <= new Date(startISO)) {
+    const startMs  = resolveTimeMs(startT, startTimestamp);
+    const endMs    = resolveTimeMs(endT, endTimestamp);
+    const startISO = new Date(startMs).toISOString();
+    const endISO   = new Date(endMs).toISOString();
+    if (endMs <= startMs) {
       toast("End time must be after start time.", "error"); return;
     }
 
@@ -2326,11 +2336,11 @@
         project:      params.project     || "",
         start_time:   startDT.toISOString(),
         end_time:     endDT.toISOString(),
-        duration_hrs: parseFloat(durHrs.toFixed(2)),
+        duration_hrs: durHrs,
         description:  params.description || ""
       }).select("id, duration_hrs").single();
       if (error) throw new Error(error.message);
-      return { success: true, id: data.id, duration: data.duration_hrs.toFixed(2) };
+      return { success: true, id: data.id, duration: String(data.duration_hrs) };
     }
 
     // ── Get logs ──────────────────────────────────────────────────────────────
@@ -2352,7 +2362,7 @@
         "Worker Name":    r.worker_name,
         "Category":       r.category,
         "Project":        r.project,
-        "Date":           r.start_time ? r.start_time.substring(0, 10) : "",
+        "Date":           r.start_time ? localDateStr(new Date(r.start_time)) : "",
         "Start Time":     r.start_time ? fmtTime12(new Date(r.start_time)) : "",
         "End Time":       r.end_time   ? fmtTime12(new Date(r.end_time))   : "",
         "Duration (hrs)": r.duration_hrs,
@@ -2365,19 +2375,21 @@
     // ── Edit log ──────────────────────────────────────────────────────────────
     if (action === "editLog") {
       const { data: existing, error: fetchErr } = await sb
-        .from("time_logs").select("start_time, end_time").eq("id", params.id).single();
+        .from("time_logs").select("start_time, end_time, duration_hrs").eq("id", params.id).single();
       if (fetchErr) throw new Error(fetchErr.message);
       const updates = {};
       if (params.description !== undefined) updates.description = params.description;
       if (params.startTime || params.endTime) {
-        let newStart = new Date(existing.start_time);
-        let newEnd   = new Date(existing.end_time);
-        if (params.startTime) { const [h,m] = params.startTime.split(":").map(Number); newStart.setHours(h,m,0,0); }
-        if (params.endTime)   { const [h,m] = params.endTime.split(":").map(Number);   newEnd.setHours(h,m,0,0); }
-        updates.start_time   = newStart.toISOString();
-        updates.end_time     = newEnd.toISOString();
-        const diffMs         = newEnd - newStart;
-        if (diffMs > 0) updates.duration_hrs = parseFloat((diffMs / 3600000).toFixed(2));
+        const oldStart = new Date(existing.start_time);
+        const oldEnd   = new Date(existing.end_time);
+        let newStart   = new Date(oldStart);
+        let newEnd     = new Date(oldEnd);
+        if (params.startTime) { const [h,m] = params.startTime.split(":").map(Number); newStart.setHours(h,m,0,0); updates.start_time = newStart.toISOString(); }
+        if (params.endTime)   { const [h,m] = params.endTime.split(":").map(Number);   newEnd.setHours(h,m,0,0);   updates.end_time   = newEnd.toISOString(); }
+        // Shift the stored duration by the change in span so break deductions are preserved
+        const deltaMs = (newEnd - newStart) - (oldEnd - oldStart);
+        const newDur  = parseFloat(existing.duration_hrs) + deltaMs / 3600000;
+        if (newEnd > newStart && newDur > 0) updates.duration_hrs = newDur;
       }
       const { error } = await sb.from("time_logs").update(updates).eq("id", params.id);
       if (error) throw new Error(error.message);
@@ -2510,8 +2522,10 @@
     let data;
     try { data = JSON.parse(jsonStr); } catch(e) { toast("Could not open entry.", "error"); return; }
     document.getElementById("edit-log-id").value = data.id    || "";
-    document.getElementById("edit-start").value  = data.start || "";
-    document.getElementById("edit-end").value    = data.end   || "";
+    const startEl = document.getElementById("edit-start");
+    const endEl   = document.getElementById("edit-end");
+    startEl.value = startEl.dataset.orig = data.start || "";
+    endEl.value   = endEl.dataset.orig   = data.end   || "";
     document.getElementById("edit-desc").value   = data.desc  || "";
     document.getElementById("edit-modal").classList.add("open");
   }
@@ -2528,13 +2542,23 @@
 
     if (!id)             { toast("Missing entry ID.", "error"); return; }
     if (!start || !end)  { toast("Start and end time required.", "error"); return; }
-    if (start >= end)    { toast("End time must be after start time.", "error"); return; }
+
+    // Only send times that were actually changed so untouched hours/seconds are never rewritten
+    const startChanged = start !== document.getElementById("edit-start").dataset.orig;
+    const endChanged   = end   !== document.getElementById("edit-end").dataset.orig;
+    if ((startChanged || endChanged) && start >= end) {
+      toast("End time must be after start time.", "error"); return;
+    }
 
     const btn = document.getElementById("edit-save-btn");
     btn.disabled = true; btn.textContent = "Saving…";
 
     try {
-      const res = await apiFetch({ action: "editLog", id, startTime: start, endTime: end, description: desc });
+      const res = await apiFetch({
+        action: "editLog", id, description: desc,
+        startTime: startChanged ? start : undefined,
+        endTime:   endChanged   ? end   : undefined
+      });
       if (res.success) {
         toast("Entry updated ✓", "success");
         closeEditModal();
