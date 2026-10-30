@@ -1,4 +1,4 @@
-const CACHE = "punchcard-afa0de9"; // replaced with commit SHA by CI
+const CACHE = "punchcard-0db768b"; // replaced with commit SHA by CI
 const ASSETS = ["./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {
