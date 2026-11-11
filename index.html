@@ -263,8 +263,6 @@
     #print-overlay .subtotal td:last-child  { color: #2e7d4f; }
     #print-overlay tfoot .total-row td { font-size: 15px; font-weight: 700; border-top: 2px solid #ddd; border-bottom: none; padding-top: 14px; }
     #print-overlay tfoot .total-row td:last-child { color: #2e7d4f; }
-    #print-overlay h2 { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #111; margin: 30px 0 8px; padding-bottom: 6px; border-bottom: 2px solid #111; }
-    #print-overlay h2:first-of-type { margin-top: 4px; }
     #print-overlay .rpt-cat { font-size: 11px; color: #999; margin-left: 8px; }
     #print-overlay .rpt-note { font-size: 12px; color: #777; margin-top: 14px; }
     #print-overlay tr { break-inside: avoid; }
@@ -3112,44 +3110,17 @@
           return { wName, rateLabel, rows, sectionHrs, sectionPay };
         });
 
-        // Project totals across all workers, grouped by category. "partial" = some of the hours
-        // belong to a worker with no pay rate, so the amount is incomplete.
-        const projAgg = {};
-        workerSections.forEach(w => w.rows.forEach(r => {
-          const key = r.cat + "\u0000" + r.proj;
-          const p   = projAgg[key] || (projAgg[key] = { cat: r.cat, proj: r.proj, hrs: 0, paySum: 0, anyPay: false, partial: false });
-          p.hrs += r.hrs;
-          if (r.pay !== null) { p.paySum += r.pay; p.anyPay = true; }
-          else if (r.hrs > 0) p.partial = true;
-        }));
-
-        const catMap = {};
-        Object.values(projAgg).forEach(p => {
-          const c = catMap[p.cat] || (catMap[p.cat] = { cat: p.cat, rows: [], catHrs: 0, paySum: 0, anyPay: false, partial: false });
-          const pay = p.anyPay ? p.paySum : null;
-          c.rows.push({ proj: p.proj, hrs: p.hrs, pay, partial: p.anyPay && p.partial });
-          c.catHrs += p.hrs;
-          if (p.anyPay) { c.paySum += p.paySum; c.anyPay = true; }
-          if (p.anyPay && p.partial) c.partial = true;
-        });
-        const projectSections = Object.values(catMap)
-          .sort((a, b) => byName(a.cat, b.cat))
-          .map(c => ({
-            cat: c.cat, catHrs: c.catHrs,
-            catPay: c.anyPay ? c.paySum : null, catPartial: c.partial,
-            rows: c.rows.sort((a, b) => byName(a.proj, b.proj))
-          }));
-
         const totalHrs  = workerSections.reduce((s, w) => s + w.sectionHrs, 0);
         const hasAnyPay = workerSections.some(w => w.sectionPay !== null);
         const totalPay  = hasAnyPay ? workerSections.reduce((s, w) => s + (w.sectionPay || 0), 0) : null;
+        // Some hours belong to a worker with no pay rate, so the total amount is incomplete
         const totalPartial = hasAnyPay && workerSections.some(w => w.sectionPay === null && w.sectionHrs > 0);
 
         if (workerSections.length === 0) { toast("No entries in this range.", "error"); return; }
 
         lastSummaryData = { summaryFor, selectedProject, fromISO, toISO,
           groupByWorker: true, groupByCategory: false, rateDesc: "",
-          rowData: null, sections: null, workerSections, projectSections, totalHrs, totalPay, totalPartial };
+          rowData: null, sections: null, workerSections, totalHrs, totalPay, totalPartial };
       }
 
       printSummary();
@@ -3166,7 +3137,7 @@
   function printSummary() {
     if (!lastSummaryData) { toast("Generate a report first.", "error"); return; }
     const { summaryFor, selectedProject, fromISO, toISO,
-            groupByWorker, groupByCategory, rateDesc, rowData, sections, workerSections, projectSections,
+            groupByWorker, groupByCategory, rateDesc, rowData, sections, workerSections,
             totalHrs, totalPay, totalPartial } = lastSummaryData;
 
     const title = `${summaryFor} · ${formatDateShort(fromISO)} – ${formatDateShort(toISO)}`;
@@ -3177,14 +3148,12 @@
       formatDateLong(fromISO) + " – " + formatDateLong(toISO);
     if (groupByCategory) metaTxt += "\nRate: " + rateDesc;
 
-    const star = on => on ? "*" : "";
-    const amt  = (pay, partial) => pay !== null ? fmtPay(pay) + star(partial) : "—";
-    const totalPayStr = amt(totalPay, totalPartial);
+    const totalPayStr = totalPay !== null ? fmtPay(totalPay) + (totalPartial ? "*" : "") : "—";
     const makeTable = (thead, tbody, tfoot) =>
       `<table><thead>${thead}</thead><tbody>${tbody}</tbody><tfoot>${tfoot}</tfoot></table>`;
     const totalRow = `<tr class="total-row"><td><strong>Total</strong></td><td>${fmtHours(totalHrs)}</td><td>${totalPayStr}</td></tr>`;
 
-    let tablesHtml, anyPartial = false;
+    let tablesHtml;
 
     if (groupByCategory) {
       let tbodyRows = "";
@@ -3197,7 +3166,7 @@
       });
       tablesHtml = makeTable(`<tr><th>Project</th><th>Hours</th><th>Amount</th></tr>`, tbodyRows, totalRow);
     } else {
-      // Part 1 — each worker, with their hours on each project
+      // Each worker, with their hours and amount on each project
       let byWorkerRows = "";
       workerSections.forEach(w => {
         const headerLabel = w.rateLabel ? `${w.wName} — ${w.rateLabel}` : w.wName;
@@ -3208,28 +3177,11 @@
         byWorkerRows += `<tr class="subtotal"><td>Subtotal — ${esc(w.wName)}</td><td>${fmtHours(w.sectionHrs)}</td><td>${w.sectionPay !== null ? fmtPay(w.sectionPay) : "—"}</td></tr>`;
       });
 
-      // Part 2 — each project's total across all workers, grouped by category
-      let byProjectRows = "";
-      projectSections.forEach(sec => {
-        byProjectRows += `<tr class="cat-header"><td colspan="3">${esc(sec.cat)}</td></tr>`;
-        sec.rows.forEach(r => {
-          if (r.partial) anyPartial = true;
-          byProjectRows += `<tr><td style="padding-left:14px;">${esc(r.proj)}</td><td>${fmtHours(r.hrs)}</td><td>${amt(r.pay, r.partial)}</td></tr>`;
-        });
-        if (sec.catPartial) anyPartial = true;
-        byProjectRows += `<tr class="subtotal"><td>Subtotal — ${esc(sec.cat)}</td><td>${fmtHours(sec.catHrs)}</td><td>${amt(sec.catPay, sec.catPartial)}</td></tr>`;
-      });
-      if (totalPartial) anyPartial = true;
-
-      tablesHtml =
-        `<h2>By worker</h2>` +
-        makeTable(`<tr><th>Project</th><th>Hours</th><th>Amount</th></tr>`, byWorkerRows, totalRow) +
-        `<h2>By project — all workers</h2>` +
-        makeTable(`<tr><th>Project</th><th>Hours</th><th>Amount</th></tr>`, byProjectRows, totalRow);
+      tablesHtml = makeTable(`<tr><th>Project</th><th>Hours</th><th>Amount</th></tr>`, byWorkerRows, totalRow);
     }
 
-    const noteHtml = anyPartial
-      ? `<p class="rpt-note">* Amount excludes hours worked by someone with no pay rate set.</p>` : "";
+    const noteHtml = (!groupByCategory && totalPartial)
+      ? `<p class="rpt-note">* Total excludes hours worked by someone with no pay rate set.</p>` : "";
 
     // Build meta lines as individual <p> tags so line breaks render correctly in innerHTML
     const metaLines = metaTxt.split("\n").map(l => `<p style="margin:0;line-height:1.8;">${esc(l)}</p>`).join("");
