@@ -246,7 +246,7 @@
     #print-overlay {
       display: none; position: fixed; inset: 0; z-index: 9999;
       background: #fff; color: #111; overflow-y: auto;
-      padding: 32px 24px calc(100px + var(--safe-bot));
+      padding: 32px 24px calc(170px + var(--safe-bot));
       font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
     }
     #print-overlay.open { display: block; }
@@ -270,7 +270,7 @@
       position: fixed; bottom: 0; left: 0; right: 0;
       padding: 12px 20px calc(12px + var(--safe-bot));
       background: #fff; border-top: 1px solid #ddd;
-      display: flex; gap: 10px; z-index: 10000;
+      display: flex; flex-wrap: wrap; gap: 10px; z-index: 10000;
     }
     #print-overlay-actions button {
       flex: 1; padding: 14px; border: none; border-radius: 12px;
@@ -278,6 +278,8 @@
     }
     #print-overlay-actions .po-back   { background: #eee; color: #111; }
     #print-overlay-actions .po-print  { background: #E8773A; color: #fff; }
+    #print-overlay-actions .po-pay    { flex: 1 1 100%; background: #2e7d4f; color: #fff; }
+    #print-overlay-actions .po-pay:disabled { opacity: 0.5; cursor: not-allowed; }
     @media print {
       #app, #toast { display: none !important; }
       #print-overlay { display: block !important; position: static !important; overflow: visible !important; padding: 0 !important; }
@@ -713,6 +715,9 @@
 
         <div id="pay-summary" class="pay-summary-box">Select a worker to see their unpaid hours.</div>
 
+        <label for="pay-cat">Category</label>
+        <select id="pay-cat" onchange="renderPayrollSummary()"><option value="">All categories</option></select>
+
         <label for="pay-through">Pay through</label>
         <input type="date" id="pay-through" onchange="renderPayrollSummary()" />
 
@@ -868,6 +873,7 @@
 <div id="print-overlay">
   <div id="print-overlay-body"></div>
   <div id="print-overlay-actions">
+    <button class="po-pay" id="po-pay-btn" onclick="markReportPaid()" style="display:none;">Mark as paid</button>
     <button class="po-back"  onclick="closePrintOverlay()">← Back</button>
     <button class="po-print" onclick="window.print()">Print / Save PDF</button>
   </div>
@@ -1015,6 +1021,7 @@
     const t = document.getElementById("pay-through");
     if (!t.value) t.value = localDateISO(new Date());
     await Promise.all([refreshAdminProjects(), refreshAdminWorkers(), refreshPayrollRates()]);
+    populatePayCategories();
     renderAdminWorkers();   // re-render now that rates are loaded
     renderPayrollSummary();
   }
@@ -1070,10 +1077,21 @@
     return new Date(y, m - 1, d + 1, 0, 0, 0, 0).getTime();
   }
 
+  function populatePayCategories() {
+    const sel  = document.getElementById("pay-cat");
+    const prev = sel.value;
+    const cats = uniqueCategories();
+    sel.innerHTML = `<option value="">All categories</option>` +
+      cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
+    if (prev && cats.includes(prev)) sel.value = prev;
+  }
+
   function payrollSelection() {
     const name   = document.getElementById("pay-worker").value;
+    const cat    = document.getElementById("pay-cat").value;
     const cutoff = payrollCutoffMs();
-    const inc    = cutoff === null ? [] : payrollEntries.filter(e => new Date(e.start_time).getTime() < cutoff);
+    const pool   = cat ? payrollEntries.filter(e => e.category === cat) : payrollEntries;
+    const inc    = cutoff === null ? [] : pool.filter(e => new Date(e.start_time).getTime() < cutoff);
     const hrs    = inc.reduce((s, e) => s + parseFloat(e.duration_hrs), 0);
     const rate   = payrollRates[name];
     let amount = null;
@@ -1081,7 +1099,7 @@
       const raw = rate.rateType === "daily" ? (hrs / 8) * rate.rateAmount : hrs * rate.rateAmount;
       amount = Math.round(raw * 100) / 100;
     }
-    return { name, inc, hrs, amount, rate, later: payrollEntries.length - inc.length };
+    return { name, cat, inc, hrs, amount, rate, later: pool.length - inc.length, otherCats: payrollEntries.length - pool.length };
   }
 
   function renderPayrollSummary() {
@@ -1090,10 +1108,12 @@
     const s   = payrollSelection();
     btn.disabled = true;
     if (!s.name) { box.textContent = "Select a worker to see their unpaid hours."; return; }
+    const otherNote = s.otherCats
+      ? `<br>${s.otherCats} unpaid ${s.otherCats === 1 ? "entry" : "entries"} in other categories ${s.otherCats === 1 ? "is" : "are"} not included.` : "";
     if (!s.inc.length) {
-      box.innerHTML = s.later
+      box.innerHTML = (s.later
         ? `<strong>Nothing unpaid through this date.</strong><br>${s.later} newer ${s.later === 1 ? "entry is" : "entries are"} still unpaid.`
-        : `<strong>All paid up.</strong> ✓`;
+        : `<strong>All paid up${s.cat ? " in " + esc(s.cat) : ""}.</strong> ✓`) + otherNote;
       return;
     }
     const days = s.inc.map(e => localDateISO(new Date(e.start_time))).sort();
@@ -1106,7 +1126,7 @@
       (s.amount !== null
         ? `Amount: <strong>${fmtPay(s.amount)}</strong> at ${esc(rateTxt)}`
         : `<span style="color:var(--red);">No pay rate set for this worker — amount will record as $0.00.</span>`) +
-      (s.later ? `<br>${s.later} newer ${s.later === 1 ? "entry stays" : "entries stay"} unpaid.` : "");
+      (s.later ? `<br>${s.later} newer ${s.later === 1 ? "entry stays" : "entries stay"} unpaid.` : "") + otherNote;
     btn.disabled = false;
   }
 
@@ -1137,18 +1157,18 @@
     if (!s.name || !s.inc.length) return;
     const through = document.getElementById("pay-through").value;
     const amtTxt  = s.amount === null ? "$0.00 (no rate set)" : fmtPay(s.amount);
-    if (!confirm(`Mark ${s.inc.length} ${s.inc.length === 1 ? "entry" : "entries"} (${fmtHours(s.hrs)}) as paid to ${s.name}?\n\nAmount: ${amtTxt}\nThrough: ${formatDateLong(through)}\n\nYou can undo this from Payout history.`)) return;
+    if (!confirm(`Mark ${s.inc.length} ${s.inc.length === 1 ? "entry" : "entries"} (${fmtHours(s.hrs)}) as paid to ${s.name}?\n\n${s.cat ? "Category: " + s.cat + "\n" : ""}Amount: ${amtTxt}\nThrough: ${formatDateLong(through)}\n\nYou can undo this from Payout history.`)) return;
 
     const btn  = document.getElementById("btn-mark-paid");
     const note = document.getElementById("pay-note");
     btn.disabled = true; btn.textContent = "Saving…";
     try {
       const res = await apiFetch({
-        action: "markPaid", adminCode, workerName: s.name,
-        throughTs: new Date(payrollCutoffMs()).toISOString(), throughDate: through,
-        expectedHours: s.hrs, note: note.value.trim()
+        action: "markPaidEntries", adminCode, throughDate: through, note: note.value.trim(),
+        payouts: [{ worker: s.name, ids: s.inc.map(e => e.id), expected_hours: s.hrs }]
       });
-      toast(`✅ Paid ${fmtHours(parseFloat(res.hours))} — ${fmtPay(parseFloat(res.amount))}`, "success");
+      const p = Array.isArray(res) && res[0] ? res[0] : { hours: s.hrs, amount: s.amount || 0 };
+      toast(`✅ Paid ${fmtHours(parseFloat(p.hours))} — ${fmtPay(parseFloat(p.amount))}`, "success");
       note.value = "";
     } catch (err) {
       toast("Could not mark paid: " + err.message, "error");
@@ -2803,7 +2823,7 @@
     }
 
     if (action === "getUnpaid") {
-      const { data, error } = await sb.from("time_logs").select("id, start_time, duration_hrs")
+      const { data, error } = await sb.from("time_logs").select("id, start_time, duration_hrs, category, project")
         .eq("worker_name", params.workerName).is("payout_id", null).order("start_time");
       if (error) throw new Error(error.message);
       return { entries: data };
@@ -2815,11 +2835,11 @@
       return { payouts: data || [] };
     }
 
-    if (action === "markPaid") {
-      const { data, error } = await sb.rpc("mark_paid", {
-        admin_code: params.adminCode, p_worker: params.workerName,
-        p_through_ts: params.throughTs, p_through_date: params.throughDate,
-        p_expected_hours: params.expectedHours, p_note: params.note || ""
+    // Pays an explicit list of entries per worker, all-or-nothing (payouts = [{ worker, ids, expected_hours }])
+    if (action === "markPaidEntries") {
+      const { data, error } = await sb.rpc("mark_paid_entries", {
+        admin_code: params.adminCode, p_payouts: params.payouts,
+        p_through_date: params.throughDate, p_note: params.note || ""
       });
       if (error) throw new Error(error.message);
       return data;
@@ -2994,6 +3014,7 @@
       const selectedWorker   = isAdminMode ? (pickedWorkers.length === 1 ? pickedWorkers[0] : "") : workerName;
       const selectedProject  = document.getElementById("filter-project").value || "";
       const selectedCategory = document.getElementById("filter-category").value || "";
+      const paidFilter       = document.getElementById("filter-paid").value || "";   // "" | "unpaid" | "paid"
       const groupByWorker    = isAdminMode && pickedWorkers.length !== 1;
       const groupByCategory  = !groupByWorker;
       const summaryFor       = groupByWorker
@@ -3015,6 +3036,8 @@
         if (isAdminMode && pickedWorkers.length && !pickedWorkers.includes(log["Worker Name"])) return false;
         if (selectedCategory && (log["Category"] || "") !== selectedCategory) return false;
         if (selectedProject && (log["Project"] || log["Category"] || "") !== selectedProject) return false;
+        if (paidFilter === "unpaid" &&  log["Payout ID"]) return false;
+        if (paidFilter === "paid"   && !log["Payout ID"]) return false;
         return true;
       });
 
@@ -3073,7 +3096,7 @@
 
         lastSummaryData = { summaryFor, selectedProject, fromISO, toISO,
           groupByWorker: false, groupByCategory: true, rateDesc, rowData: null,
-          sections, totalHrs, totalPay };
+          sections, totalHrs, totalPay, entries: filtered, paidFilter };
 
       // ── Multi-worker report (admin, all workers) ─────────────────────────
       // Part 1: each worker with their hours per PROJECT. Part 2: each project's total across all workers.
@@ -3120,7 +3143,8 @@
 
         lastSummaryData = { summaryFor, selectedProject, fromISO, toISO,
           groupByWorker: true, groupByCategory: false, rateDesc: "",
-          rowData: null, sections: null, workerSections, totalHrs, totalPay, totalPartial };
+          rowData: null, sections: null, workerSections, totalHrs, totalPay, totalPartial,
+          entries: filtered, paidFilter };
       }
 
       printSummary();
@@ -3138,7 +3162,7 @@
     if (!lastSummaryData) { toast("Generate a report first.", "error"); return; }
     const { summaryFor, selectedProject, fromISO, toISO,
             groupByWorker, groupByCategory, rateDesc, rowData, sections, workerSections,
-            totalHrs, totalPay, totalPartial } = lastSummaryData;
+            totalHrs, totalPay, totalPartial, entries, paidFilter } = lastSummaryData;
 
     const title = `${summaryFor} · ${formatDateShort(fromISO)} – ${formatDateShort(toISO)}`;
 
@@ -3146,6 +3170,7 @@
     let metaTxt = summaryFor + "\n" +
       (selectedProject ? selectedProject + "\n" : "") +
       formatDateLong(fromISO) + " – " + formatDateLong(toISO);
+    if (paidFilter) metaTxt += "\n" + (paidFilter === "unpaid" ? "Unpaid entries only" : "Paid entries only");
     if (groupByCategory) metaTxt += "\nRate: " + rateDesc;
 
     const totalPayStr = totalPay !== null ? fmtPay(totalPay) + (totalPartial ? "*" : "") : "—";
@@ -3186,6 +3211,13 @@
     // Build meta lines as individual <p> tags so line breaks render correctly in innerHTML
     const metaLines = metaTxt.split("\n").map(l => `<p style="margin:0;line-height:1.8;">${esc(l)}</p>`).join("");
 
+    // "Mark as paid" appears only for admins, and only when the report contains unpaid entries
+    const unpaidCount = isAdminMode ? entries.filter(l => !l["Payout ID"]).length : 0;
+    const payBtn = document.getElementById("po-pay-btn");
+    payBtn.style.display = unpaidCount ? "" : "none";
+    payBtn.disabled      = false;
+    payBtn.textContent   = `Mark ${unpaidCount} ${unpaidCount === 1 ? "entry" : "entries"} as paid`;
+
     document.getElementById("print-overlay-body").innerHTML =
       `<h1>Punchcard Report</h1>
        <div class="meta">${metaLines}</div>
@@ -3195,6 +3227,65 @@
     const overlay = document.getElementById("print-overlay");
     overlay.classList.add("open");
     overlay.scrollTop = 0;
+  }
+
+  // Pays exactly the unpaid entries on the report: one payout per worker, all-or-nothing
+  async function markReportPaid() {
+    if (!isAdminMode || !lastSummaryData || !lastSummaryData.entries) return;
+    const { entries, toISO } = lastSummaryData;
+    const unpaid  = entries.filter(l => !l["Payout ID"]);
+    const skipped = entries.length - unpaid.length;
+    if (!unpaid.length) return;
+
+    const byWorker = {};
+    unpaid.forEach(l => {
+      const w = l["Worker Name"] || "Unknown";
+      const g = byWorker[w] || (byWorker[w] = { ids: [], hrs: 0 });
+      g.ids.push(l["ID"]);
+      g.hrs += parseDuration(l["Duration (hrs)"]);
+    });
+    const names = Object.keys(byWorker).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+    let totalHrs = 0, totalAmt = 0, noRate = [];
+    const lines = names.map(n => {
+      const g = byWorker[n], r = workerRates[n];
+      totalHrs += g.hrs;
+      if (r && r.rateAmount > 0) {
+        const amt = Math.round((r.rateType === "daily" ? (g.hrs / 8) * r.rateAmount : g.hrs * r.rateAmount) * 100) / 100;
+        totalAmt += amt;
+        return `${n} — ${fmtHours(g.hrs)} — ${fmtPay(amt)}`;
+      }
+      noRate.push(n);
+      return `${n} — ${fmtHours(g.hrs)} — $0.00 (no rate set)`;
+    });
+
+    const message =
+      `Mark ${unpaid.length} ${unpaid.length === 1 ? "entry" : "entries"} as paid?\n\n` +
+      lines.join("\n") + "\n\n" +
+      `Total: ${fmtHours(totalHrs)} — ${fmtPay(totalAmt)}\nThrough: ${formatDateLong(toISO)}` +
+      (skipped ? `\n\n${skipped} already-paid ${skipped === 1 ? "entry" : "entries"} on this report will be skipped.` : "") +
+      (noRate.length ? `\n\nNo pay rate set for ${noRate.join(", ")} — their payout will record as $0.00.` : "") +
+      `\n\nOptional note (check #, Venmo…), then OK to confirm. Undo is in Admin → Payroll.`;
+    const note = prompt(message, "");
+    if (note === null) return;
+
+    const btn = document.getElementById("po-pay-btn");
+    btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      const res = await apiFetch({
+        action: "markPaidEntries", adminCode, throughDate: toISO, note: note.trim(),
+        payouts: names.map(n => ({ worker: n, ids: byWorker[n].ids, expected_hours: byWorker[n].hrs }))
+      });
+      const paid = Array.isArray(res) ? res : [];
+      const paidAmt = paid.reduce((s, p) => s + parseFloat(p.amount), 0);
+      toast(`✅ Paid ${paid.length} ${paid.length === 1 ? "worker" : "workers"} — ${fmtPay(paidAmt)}`, "success");
+      closePrintOverlay();
+      loadHistory();
+    } catch (err) {
+      toast("Could not mark paid: " + err.message, "error");
+      btn.disabled = false;
+      btn.textContent = `Mark ${unpaid.length} ${unpaid.length === 1 ? "entry" : "entries"} as paid`;
+    }
   }
 
   function closePrintOverlay() {
