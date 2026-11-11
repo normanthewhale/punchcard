@@ -195,6 +195,14 @@
     .filter-row > div { flex: 1; min-width: 130px; }
     .filter-row label { margin-bottom: 4px; }
     .filter-row select, .filter-row input[type="date"] { margin-bottom: 0; font-size: 14px; padding: 10px 12px; }
+    .filter-row > #filter-worker-wrap { flex-basis: 100%; }
+    .ms-btn { width:100%; display:flex; justify-content:space-between; align-items:center; gap:8px; background:var(--bg3); border:1px solid var(--border); border-radius:10px; color:var(--text); font-size:14px; font-family:inherit; text-align:left; padding:10px 12px; cursor:pointer; transition:border-color .2s; }
+    .ms-btn:hover, .ms-btn[aria-expanded="true"] { border-color:var(--orange); }
+    .ms-caret { color:var(--text3); flex-shrink:0; }
+    .ms-menu { margin-top:6px; background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:4px; max-height:240px; overflow-y:auto; }
+    .ms-menu .ms-item { display:flex; align-items:center; gap:10px; margin:0; padding:9px 10px; border-radius:8px; font-size:14px; color:var(--text); cursor:pointer; }
+    .ms-menu .ms-item:hover { background:var(--bg2); }
+    .ms-menu .ms-item input { width:18px; height:18px; margin:0; flex-shrink:0; accent-color:var(--orange); }
     .btn-filter-clear { padding: 10px 16px; font-size: 14px; white-space: nowrap; width: auto; border-radius: 10px; }
 
     /* ── Stats grid ── */
@@ -645,10 +653,13 @@
             </select>
           </div>
           <div id="filter-worker-wrap" style="display:none;">
-            <label>Worker</label>
-            <select id="filter-worker" onchange="applyFilters()">
-              <option value="">All workers</option>
-            </select>
+            <label>Workers</label>
+            <div id="worker-ms">
+              <button type="button" class="ms-btn" id="worker-ms-btn" onclick="toggleWorkerMenu()" aria-expanded="false">
+                <span id="worker-ms-label">All workers</span><span class="ms-caret">▾</span>
+              </button>
+              <div class="ms-menu" id="worker-ms-menu" style="display:none;"></div>
+            </div>
           </div>
           <div>
             <label>Pay status</label>
@@ -2233,33 +2244,75 @@
           const sheetNames = res.workers || [];
           // Also include any names found in log history (catch anyone not yet in Workers sheet)
           const logNames   = allLogs.map(l => l["Worker Name"]).filter(Boolean);
-          const names      = [...new Set([...sheetNames, ...logNames])].sort();
-          const sel        = document.getElementById("filter-worker");
-          const prev       = sel.value;
-          sel.innerHTML    = '<option value="">All workers</option>' +
-            names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
-          if (prev && names.includes(prev)) sel.value = prev;
+          setWorkerNameList([...new Set([...sheetNames, ...logNames])].sort());
         })
         .catch(() => {
           // Fallback: derive from loaded logs
-          const names = [...new Set(allLogs.map(l => l["Worker Name"]).filter(Boolean))].sort();
-          const sel   = document.getElementById("filter-worker");
-          sel.innerHTML = '<option value="">All workers</option>' +
-            names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+          setWorkerNameList([...new Set(allLogs.map(l => l["Worker Name"]).filter(Boolean))].sort());
         });
     }
   }
+
+  // ── Worker multi-select (admin filter) ────────────────────────────────────
+  // Empty selection = all workers; 1 = single-worker report; 2+ = multi-worker report
+  let selectedWorkers = new Set();
+  let workerNameList  = [];
+
+  function setWorkerNameList(names) {
+    workerNameList = names;
+    const before = selectedWorkers.size;
+    selectedWorkers = new Set([...selectedWorkers].filter(n => names.includes(n)));
+    renderWorkerMenu();
+    if (selectedWorkers.size !== before) applyFilters();
+  }
+
+  function renderWorkerMenu() {
+    const n = selectedWorkers.size;
+    document.getElementById("worker-ms-label").textContent =
+      n === 0 ? "All workers" : n === 1 ? [...selectedWorkers][0] : `${n} workers`;
+    document.getElementById("worker-ms-menu").innerHTML =
+      `<label class="ms-item"><input type="checkbox"${n === 0 ? " checked" : ""} onchange="onWorkerAllToggle()"><span>All workers</span></label>` +
+      workerNameList.map((name, i) =>
+        `<label class="ms-item"><input type="checkbox"${selectedWorkers.has(name) ? " checked" : ""} onchange="onWorkerToggle(${i}, this.checked)"><span>${esc(name)}</span></label>`
+      ).join("");
+  }
+
+  function toggleWorkerMenu(forceOpen) {
+    const menu = document.getElementById("worker-ms-menu");
+    const open = forceOpen !== undefined ? forceOpen : menu.style.display === "none";
+    menu.style.display = open ? "" : "none";
+    document.getElementById("worker-ms-btn").setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  function onWorkerAllToggle() {
+    selectedWorkers.clear();
+    renderWorkerMenu();
+    applyFilters();
+  }
+
+  function onWorkerToggle(i, on) {
+    const name = workerNameList[i];
+    if (on) selectedWorkers.add(name); else selectedWorkers.delete(name);
+    if (selectedWorkers.size === workerNameList.length) selectedWorkers.clear(); // everyone ticked = all
+    renderWorkerMenu();
+    applyFilters();
+  }
+
+  document.addEventListener("click", e => {
+    const wrap = document.getElementById("worker-ms");
+    if (wrap && !wrap.contains(e.target)) toggleWorkerMenu(false);
+  });
 
   function applyFilters() {
     const from    = document.getElementById("filter-from").value;
     const to      = document.getElementById("filter-to").value;
     const project = document.getElementById("filter-project").value;
     const cat     = document.getElementById("filter-category").value;
-    const worker  = isAdminMode ? document.getElementById("filter-worker").value : "";
+    const workers = isAdminMode ? [...selectedWorkers] : [];   // [] = all workers
     const paidF   = document.getElementById("filter-paid").value; // "" | "unpaid" | "paid"
     const sort    = document.getElementById("filter-sort").value; // "newest" | "oldest"
 
-    renderUnpaidBanner(worker);
+    renderUnpaidBanner(workers);
 
     let logs = allLogs.filter(log => {
       const d = normalizeDate(log["Date"]);
@@ -2267,7 +2320,7 @@
       if (to   && d > to)   return false;
       if (project && log["Project"]    !== project) return false;
       if (cat     && log["Category"]   !== cat)     return false;
-      if (worker  && log["Worker Name"] !== worker)  return false;
+      if (workers.length && !workers.includes(log["Worker Name"])) return false;
       if (paidF === "unpaid" &&  log["Payout ID"]) return false;
       if (paidF === "paid"   && !log["Payout ID"]) return false;
       return true;
@@ -2290,12 +2343,15 @@
   }
 
   // Unpaid hours across ALL of a worker's logs (ignores date/project filters); hours only, no dollars
-  function renderUnpaidBanner(worker) {
+  function renderUnpaidBanner(workers) {
+    const picked = workers || [];
     const el     = document.getElementById("unpaid-banner");
-    const pool   = allLogs.filter(l => !worker || l["Worker Name"] === worker);
+    const pool   = allLogs.filter(l => !picked.length || picked.includes(l["Worker Name"]));
     const unpaid = pool.filter(l => !l["Payout ID"]);
     const hrs    = unpaid.reduce((s, l) => s + parseDuration(l["Duration (hrs)"]), 0);
-    const scope  = (isAdminMode && !worker) ? " (all workers)" : "";
+    const scope  = !isAdminMode ? ""
+      : picked.length === 0 ? " (all workers)"
+      : picked.length > 1   ? ` (${picked.length} workers)` : "";
     el.style.display = "";
     if (!unpaid.length) {
       el.className = "unpaid-banner clear";
@@ -2361,7 +2417,7 @@
     document.getElementById("filter-category").value = "";
     document.getElementById("filter-sort").value     = "newest";
     document.getElementById("filter-paid").value     = "";
-    if (isAdminMode) document.getElementById("filter-worker").value = "";
+    if (isAdminMode) { selectedWorkers.clear(); renderWorkerMenu(); }
     applyFilters();
   }
 
@@ -2935,12 +2991,16 @@
       if (!fromISO || !toISO) { toast("Set a date range in the filters first.", "error"); return; }
       if (fromISO > toISO)    { toast("'From' date must be before 'To'.", "error"); return; }
 
-      const selectedWorker   = isAdminMode ? (document.getElementById("filter-worker").value || "") : workerName;
+      // Admin: no workers ticked = all, 1 = single-worker report, 2+ = multi-worker report
+      const pickedWorkers    = isAdminMode ? [...selectedWorkers] : [];
+      const selectedWorker   = isAdminMode ? (pickedWorkers.length === 1 ? pickedWorkers[0] : "") : workerName;
       const selectedProject  = document.getElementById("filter-project").value || "";
       const selectedCategory = document.getElementById("filter-category").value || "";
-      const groupByWorker    = isAdminMode && selectedWorker === "";
+      const groupByWorker    = isAdminMode && pickedWorkers.length !== 1;
       const groupByCategory  = !groupByWorker;
-      const summaryFor       = groupByWorker ? "All workers" : (selectedWorker || workerName || "—");
+      const summaryFor       = groupByWorker
+        ? (pickedWorkers.length ? pickedWorkers.join(", ") : "All workers")
+        : (selectedWorker || workerName || "—");
 
       if (isAdminMode) {
         try {
@@ -2954,7 +3014,7 @@
         const d = normalizeDate(log["Date"]);
         if (d < fromISO || d > toISO) return false;
         if (!isAdminMode && (log["Worker Name"] || "").trim() !== workerName) return false;
-        if (!groupByWorker && selectedWorker && (log["Worker Name"] || "").trim() !== selectedWorker) return false;
+        if (isAdminMode && pickedWorkers.length && !pickedWorkers.includes(log["Worker Name"])) return false;
         if (selectedCategory && (log["Category"] || "") !== selectedCategory) return false;
         if (selectedProject && (log["Project"] || log["Category"] || "") !== selectedProject) return false;
         return true;
