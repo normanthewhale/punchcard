@@ -730,6 +730,47 @@
         <div id="pay-history"><p style="color:var(--text3);font-size:13px;padding:4px 6px;">Select a worker.</p></div>
       </div>
 
+      <!-- Add entry for a worker -->
+      <div class="card">
+        <div class="admin-section-hd">
+          <span class="card-title" style="margin-bottom:0;">Add entry for a worker</span>
+        </div>
+        <p class="admin-hint">For missed clock-ins or entries that need replacing. Saves exactly as if the worker logged it.</p>
+
+        <label for="ae-worker">Worker</label>
+        <select id="ae-worker"></select>
+
+        <label for="ae-date">Date</label>
+        <input type="date" id="ae-date" onchange="aeUpdateDuration()" />
+
+        <div class="field-row">
+          <div>
+            <label for="ae-start">Start time</label>
+            <input type="time" id="ae-start" oninput="aeUpdateDuration()" />
+          </div>
+          <div>
+            <label for="ae-end">End time</label>
+            <input type="time" id="ae-end" oninput="aeUpdateDuration()" />
+          </div>
+        </div>
+
+        <label for="ae-break">Break (minutes, optional)</label>
+        <input type="text" id="ae-break" inputmode="numeric" placeholder="0" oninput="aeUpdateDuration()" />
+
+        <div class="pay-summary-box" id="ae-duration">Set a start and end time.</div>
+
+        <label for="ae-cat">Category</label>
+        <select id="ae-cat" onchange="aeFillProjects('')"></select>
+
+        <label for="ae-proj">House / Project</label>
+        <select id="ae-proj"></select>
+
+        <label for="ae-desc">What was done? (optional)</label>
+        <textarea id="ae-desc" rows="2" style="min-height:70px;" placeholder="e.g. Forgot to clock in — framing at Lot 6"></textarea>
+
+        <button class="btn btn-submit" id="btn-add-entry" onclick="adminAddEntry()">Add entry</button>
+      </div>
+
       <!-- Workers card -->
       <div class="card">
         <div class="admin-section-hd">
@@ -1024,6 +1065,112 @@
     populatePayCategories();
     renderAdminWorkers();   // re-render now that rates are loaded
     renderPayrollSummary();
+    initAdminEntryForm();
+  }
+
+  // ── Add entry for a worker (admin) ────────────────────────────────────────
+  function initAdminEntryForm() {
+    const wSel  = document.getElementById("ae-worker");
+    const prevW = wSel.value;
+    wSel.innerHTML = `<option value="">Select a worker…</option>` +
+      adminWorkers.map(w => `<option value="${esc(w.name)}">${esc(w.name)}</option>`).join("");
+    if (prevW && adminWorkers.some(w => w.name === prevW)) wSel.value = prevW;
+
+    const dateEl = document.getElementById("ae-date");
+    dateEl.max = localDateISO(new Date());
+    if (!dateEl.value) dateEl.value = dateEl.max;
+
+    const cSel    = document.getElementById("ae-cat");
+    const prevC   = cSel.value;
+    const prevP   = document.getElementById("ae-proj").value;
+    const cats    = uniqueCategories();
+    cSel.innerHTML = `<option value="">Select a category…</option>` +
+      cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
+    if (prevC && cats.includes(prevC)) cSel.value = prevC;
+    aeFillProjects(prevP);
+    aeUpdateDuration();
+  }
+
+  function aeFillProjects(selected) {
+    const cat   = document.getElementById("ae-cat").value;
+    const projs = cat ? allProjects.filter(p => p.category === cat) : [];
+    document.getElementById("ae-proj").innerHTML = !cat
+      ? `<option value="">Select a category first…</option>`
+      : projs.length
+        ? `<option value="">Select a project…</option>` +
+          projs.map(p => `<option value="${esc(p.name)}"${p.name === selected ? " selected" : ""}>${esc(p.name)}</option>`).join("")
+        : `<option value="">No projects in this category</option>`;
+  }
+
+  // An end time at or before the start time means the shift ran past midnight
+  function aeTimes() {
+    const date  = document.getElementById("ae-date").value;
+    const start = document.getElementById("ae-start").value;
+    const end   = document.getElementById("ae-end").value;
+    const brkTx = document.getElementById("ae-break").value.trim();
+    const brk   = brkTx === "" ? 0 : Number(brkTx);
+    if (!date || !start || !end) return null;
+    const [y, mo, d] = date.split("-").map(Number);
+    const [sh, sm] = start.split(":").map(Number);
+    const [eh, em] = end.split(":").map(Number);
+    const startMs = new Date(y, mo - 1, d, sh, sm).getTime();
+    let endMs     = new Date(y, mo - 1, d, eh, em).getTime();
+    const overnight = endMs <= startMs;
+    if (overnight) endMs = new Date(y, mo - 1, d + 1, eh, em).getTime();
+    return { startMs, endMs, overnight, breakMs: brk * 60000, breakValid: Number.isFinite(brk) && brk >= 0 };
+  }
+
+  function aeUpdateDuration() {
+    const box = document.getElementById("ae-duration");
+    const t   = aeTimes();
+    if (!t) { box.textContent = "Set a start and end time."; return; }
+    if (!t.breakValid) { box.innerHTML = `<span style="color:var(--red);">Break must be a number of minutes.</span>`; return; }
+    const worked = (t.endMs - t.startMs - t.breakMs) / 3600000;
+    if (worked <= 0) { box.innerHTML = `<span style="color:var(--red);">The break is longer than the shift.</span>`; return; }
+    box.innerHTML = `Duration: <strong>${fmtHours(worked)}</strong>` +
+      (t.breakMs ? ` (after a ${fmtHours(t.breakMs / 3600000)} break)` : "") +
+      (t.overnight ? `<br><span style="color:var(--orange);">Ends the next day (overnight shift).</span>` : "");
+  }
+
+  async function adminAddEntry() {
+    const worker = document.getElementById("ae-worker").value;
+    const cat    = document.getElementById("ae-cat").value;
+    const proj   = document.getElementById("ae-proj").value;
+    const desc   = document.getElementById("ae-desc").value.trim();
+    const date   = document.getElementById("ae-date").value;
+    const t      = aeTimes();
+
+    if (!worker) { toast("Select a worker.", "error"); return; }
+    if (!t)      { toast("Set the date, start and end time.", "error"); return; }
+    if (date > localDateISO(new Date())) { toast("Date can't be in the future.", "error"); return; }
+    if (!t.breakValid) { toast("Break must be a number of minutes.", "error"); return; }
+    const worked = (t.endMs - t.startMs - t.breakMs) / 3600000;
+    if (worked <= 0) { toast("The break is longer than the shift.", "error"); return; }
+    if (!cat)  { toast("Select a category.", "error"); return; }
+    if (!proj) { toast("Select a project.", "error"); return; }
+
+    const when = `${formatDateLong(date)}, ${fmtTime12(new Date(t.startMs))} – ${fmtTime12(new Date(t.endMs))}` +
+      (t.overnight ? " (next day)" : "");
+    if (!confirm(`Add ${fmtHours(worked)} for ${worker}?\n\n${when}${t.breakMs ? "\nBreak: " + fmtHours(t.breakMs / 3600000) : ""}\n${proj} (${cat})`)) return;
+
+    const btn = document.getElementById("btn-add-entry");
+    btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      const res = await apiFetch({
+        action: "logTime", workerName: worker, category: cat, project: proj,
+        startTime: new Date(t.startMs).toISOString(), endTime: new Date(t.endMs).toISOString(),
+        description: desc, pausedMs: t.breakMs
+      });
+      if (!res.success) throw new Error(res.error || "Unknown error");
+      toast(`✅ Added ${fmtHours(parseFloat(res.duration) || worked)} for ${worker}`, "success");
+      // Keep worker and date for adding several entries in a row
+      ["ae-start", "ae-end", "ae-break", "ae-desc"].forEach(id => document.getElementById(id).value = "");
+      aeUpdateDuration();
+    } catch (err) {
+      toast("Could not add entry: " + err.message, "error");
+    } finally {
+      btn.disabled = false; btn.textContent = "Add entry";
+    }
   }
 
   // ── Payroll ───────────────────────────────────────────────────────────────
