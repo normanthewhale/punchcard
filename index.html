@@ -143,6 +143,7 @@
     .btn-stop      { background: var(--red);    color: #fff; }
     .btn-submit    { background: var(--orange); color: #fff; }
     .btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
+    .btn-delete    { background: none; color: var(--red); border: 1px solid var(--red); }
 
     /* ── Form fields ── */
     label { display: block; font-size: 13px; font-weight: 500; color: var(--text2); margin-bottom: 6px; }
@@ -905,6 +906,7 @@
     <textarea id="edit-desc" rows="3"></textarea>
     <button class="btn btn-submit" id="edit-save-btn" onclick="saveEditLog()">Save changes</button>
     <button class="btn btn-secondary" style="margin-top:10px;" onclick="closeEditModal()">Cancel</button>
+    <button class="btn btn-delete" id="edit-delete-btn" style="display:none; margin-top:10px;" onclick="deleteEditLog()">Delete entry</button>
   </div>
 </div>
 
@@ -2634,7 +2636,11 @@
         id:    log["ID"] || "",
         start: amPmToHHMM(log["Start Time"]),
         end:   amPmToHHMM(log["End Time"]),
-        desc:  log["Description"] || ""
+        desc:  log["Description"] || "",
+        worker: log["Worker Name"] || "",
+        project: project,
+        when:  `${dateLong}, ${startFmt} – ${endFmt}`,
+        dur:   durStr
       }));
 
       const isPaid    = !!log["Payout ID"];
@@ -2969,6 +2975,12 @@
       return data;
     }
 
+    if (action === "deleteLog") {
+      const { data, error } = await sb.rpc("delete_log", { admin_code: params.adminCode, p_id: params.id });
+      if (error) throw new Error(error.message);
+      return data;
+    }
+
     if (action === "getUnpaid") {
       const { data, error } = await sb.from("time_logs").select("id, start_time, duration_hrs, category, project")
         .eq("worker_name", params.workerName).is("payout_id", null).order("start_time");
@@ -3075,9 +3087,32 @@
   }
 
   // ── Edit log modal ────────────────────────────────────────────────────────
+  let editingLog = null;
+
+  // Admin only. The database refuses to delete paid entries (undo the payout first).
+  async function deleteEditLog() {
+    if (!isAdminMode || !editingLog || !editingLog.id) return;
+    const d = editingLog;
+    if (!confirm(`Delete this entry permanently?\n\n${d.worker ? d.worker + "\n" : ""}${d.project}\n${d.when}\n${d.dur}\n\nThis cannot be undone.`)) return;
+    const btn = document.getElementById("edit-delete-btn");
+    btn.disabled = true; btn.textContent = "Deleting…";
+    try {
+      await apiFetch({ action: "deleteLog", adminCode, id: d.id });
+      toast("Entry deleted.", "success");
+      closeEditModal();
+      loadHistory();
+    } catch (err) {
+      toast("Could not delete: " + err.message, "error");
+    } finally {
+      btn.disabled = false; btn.textContent = "Delete entry";
+    }
+  }
+
   function openEditModal(jsonStr) {
     let data;
     try { data = JSON.parse(jsonStr); } catch(e) { toast("Could not open entry.", "error"); return; }
+    editingLog = data;
+    document.getElementById("edit-delete-btn").style.display = isAdminMode ? "" : "none";
     document.getElementById("edit-log-id").value = data.id    || "";
     const startEl = document.getElementById("edit-start");
     const endEl   = document.getElementById("edit-end");
